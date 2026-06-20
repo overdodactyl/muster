@@ -158,6 +158,43 @@ func RenderUsers(w io.Writer, rows []aggregate.UserRollup) {
 	t.Render()
 }
 
+func RenderQueue(w io.Writer, rows []aggregate.QueueRow) {
+	if w == nil {
+		w = os.Stdout
+	}
+	if len(rows) == 0 {
+		fmt.Fprintln(w, "no queued jobs matched")
+		return
+	}
+	t := newTable(w, []string{"JOBID", "USER", "CPU", "GPU", "MEM", "PRI", "REASON", "EXPLANATION"})
+	for _, r := range rows {
+		gpu := "0"
+		if r.GPUs > 0 {
+			gpu = fmt.Sprintf("%d", r.GPUs)
+		}
+		reason := r.Reason
+		if reason == "" {
+			reason = "-"
+		}
+		reasonH := r.ReasonHuman
+		switch r.Reason {
+		case "JobHeldUser", "JobHeldAdmin", "DependencyNeverSatisfied":
+			reason = ColorYellow(reason)
+		}
+		t.Append([]string{
+			fmt.Sprintf("%d", r.JobID),
+			ColorCyan(r.User),
+			fmt.Sprintf("%d", r.CPUs),
+			gpu,
+			HumanMB(r.MemoryMB),
+			fmt.Sprintf("%d", r.Priority),
+			reason,
+			reasonH,
+		})
+	}
+	t.Render()
+}
+
 // JoinList truncates a string slice for fixed-width display.
 func JoinList(items []string, max int) string {
 	if len(items) == 0 {
