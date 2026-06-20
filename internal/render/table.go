@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/fatih/color"
 	"github.com/jedib0t/go-pretty/v6/table"
@@ -327,7 +328,7 @@ func RenderJobs(w io.Writer, rows []aggregate.JobRow) {
 		fmt.Fprintln(w, "no jobs matched")
 		return
 	}
-	t := newTable(w, []string{"JOBID", "USER", "NAME", "PART", "ST", "NODES", "CPU", "GPU", "MEM", "RUNTIME"})
+	t := newTable(w, []string{"JOBID", "USER", "NAME", "PART", "ST", "NODES", "CPU", "GPU", "MEM", "TIME (used / limit)"})
 	for _, r := range rows {
 		gpu := ColorFaint("-")
 		if r.GPUs > 0 {
@@ -353,10 +354,33 @@ func RenderJobs(w io.Writer, rows []aggregate.JobRow) {
 			r.CPUs,
 			gpu,
 			HumanMB(r.MemoryMB),
-			HumanDuration(r.Runtime),
+			formatRuntimeCell(r.Runtime, r.TimeLimit),
 		})
 	}
 	t.Render()
+}
+
+// formatRuntimeCell renders the TIME column. For running jobs with a finite
+// time limit: `5h12m / 8h  ████░░ 65%`. Without a limit: just the runtime.
+// For pending or zero-runtime: faint dash.
+func formatRuntimeCell(runtime, limit time.Duration) string {
+	if runtime <= 0 {
+		return ColorFaint("-")
+	}
+	if limit <= 0 {
+		return HumanDuration(runtime)
+	}
+	used := int(runtime.Seconds())
+	total := int(limit.Seconds())
+	pct := used * 100 / total
+	if pct > 100 {
+		pct = 100
+	}
+	return fmt.Sprintf("%s / %s  %s %3d%%",
+		HumanDuration(runtime),
+		HumanDuration(limit),
+		Bar(used, total, 6),
+		pct)
 }
 
 func RenderQueue(w io.Writer, rows []aggregate.QueueRow) {
