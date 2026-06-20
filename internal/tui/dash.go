@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -111,9 +112,12 @@ type model struct {
 	lastQueue      []aggregate.QueueRow
 	lastHistory    []aggregate.HistoryRow
 
-	detailOpen  bool
-	detailTitle string
-	detailBody  string
+	detailOpen   bool
+	detailTitle  string
+	detailBody   string
+	detailJobID  int64    // non-zero when the detail is a job/queue row
+	detailLogs   []string // captured stdout tail, refreshed each tick while open
+	detailLogErr error
 
 	confirmCancelID    int64
 	confirmCancelName  string
@@ -336,8 +340,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.ensureCursorVisible()
 			return m, nil
 		case "enter":
-			m.openDetail()
-			return m, nil
+			return m, m.openDetail()
 		case "c":
 			m.maybeOpenConfirmCancel()
 			return m, nil
@@ -403,11 +406,14 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.ticks++
 		m.loading = true
 		cmds := []tea.Cmd{m.fetchNodesCmd(), m.fetchJobsCmd(), tickEvery()}
-		// Periodic sacct refresh - only if user has already opened the
-		// History tab, otherwise it's wasted work.
+		// Periodic sacct refresh.
 		if m.acctLoaded && m.ticks%historyRefreshEvery == 0 && !m.acctInFlight {
 			m.acctInFlight = true
 			cmds = append(cmds, m.fetchAcctCmd())
+		}
+		// If a job detail overlay is open, refresh its log tail too.
+		if m.detailOpen && m.detailJobID > 0 {
+			cmds = append(cmds, m.fetchLogTailCmd(m.detailJobID))
 		}
 		return m, tea.Batch(cmds...)
 
@@ -429,6 +435,13 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case logTailMsg:
+		if msg.jobID == m.detailJobID && m.detailOpen {
+			m.detailLogs = msg.lines
+			m.detailLogErr = msg.err
+		}
+		return m, nil
+
 	case cancelResultMsg:
 		if msg.err != nil {
 			m.cancelFlash = fmt.Sprintf("failed to cancel job %d: %s", msg.id, msg.err.Error())
@@ -447,6 +460,38 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 type cancelResultMsg struct {
 	id  int64
 	err error
+}
+
+type logTailMsg struct {
+	jobID int64
+	lines []string
+	err   error
+}
+
+const detailLogTailLines = 18
+
+// fetchLogTailCmd reads the last N lines of a job's stdout via scontrol +
+// `tail -n N <path>`. Results land as logTailMsg in the Update loop.
+func (m *model) fetchLogTailCmd(jobID int64) tea.Cmd {
+	c := m.client
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		d, err := c.JobDetail(ctx, jobID)
+		if err != nil {
+			return logTailMsg{jobID: jobID, err: err}
+		}
+		path := d.StandardOutput
+		if path == "" {
+			return logTailMsg{jobID: jobID, err: fmt.Errorf("interactive session — no stdout file")}
+		}
+		out, err := exec.CommandContext(ctx, "tail", "-n", fmt.Sprintf("%d", detailLogTailLines), path).Output()
+		if err != nil {
+			return logTailMsg{jobID: jobID, err: err}
+		}
+		lines := strings.Split(strings.TrimRight(string(out), "\n"), "\n")
+		return logTailMsg{jobID: jobID, lines: lines}
+	}
 }
 
 func (m *model) cancelJobCmd(id int64) tea.Cmd {
@@ -666,22 +711,42 @@ func (m *model) renderConfirmCancel(maxHeight int) string {
 }
 
 func (m *model) renderDetailOverlay(maxHeight int) string {
-	body := strings.Join([]string{
+	parts := []string{
 		helpTitleStyle.Render(m.detailTitle),
 		"",
 		m.detailBody,
-		"",
-		render.ColorFaint("press any key to return"),
-	}, "\n")
+	}
+	if m.detailJobID > 0 {
+		parts = append(parts, "", helpSectionStyle.Render("stdout tail"))
+		switch {
+		case m.detailLogErr != nil:
+			parts = append(parts, render.ColorFaint("  ("+m.detailLogErr.Error()+")"))
+		case m.detailLogs == nil:
+			parts = append(parts, render.ColorFaint("  loading…"))
+		case len(m.detailLogs) == 0 || (len(m.detailLogs) == 1 && m.detailLogs[0] == ""):
+			parts = append(parts, render.ColorFaint("  (empty)"))
+		default:
+			for _, ln := range m.detailLogs {
+				parts = append(parts, "  "+ln)
+			}
+		}
+	}
+	parts = append(parts, "", render.ColorFaint("press any key to return"))
+	body := strings.Join(parts, "\n")
 	card := helpCardStyle.Render(body)
 	return lipgloss.Place(m.width, maxHeight, lipgloss.Center, lipgloss.Center, card)
 }
 
-func (m *model) openDetail() {
+// openDetail prepares the detail overlay for the current cursor row and
+// returns a tea.Cmd that fetches the job log tail (jobs/queue tabs only).
+func (m *model) openDetail() tea.Cmd {
 	cur := m.cursor[m.tab]
 	if cur < 0 || cur >= m.rowCounts[m.tab] {
-		return
+		return nil
 	}
+	m.detailJobID = 0
+	m.detailLogs = nil
+	m.detailLogErr = nil
 
 	switch m.tab {
 	case tabPartitions:
@@ -703,6 +768,9 @@ func (m *model) openDetail() {
 			j := m.lastJobs[cur]
 			m.detailTitle = fmt.Sprintf("Job %d  %s / %s", j.JobID, j.User, j.Name)
 			m.detailBody = renderJobDetail(j)
+			m.detailJobID = j.JobID
+			m.detailLogs = nil
+			m.detailLogErr = nil
 			m.detailOpen = true
 		}
 	case tabUsers:
@@ -717,6 +785,9 @@ func (m *model) openDetail() {
 			q := m.lastQueue[cur]
 			m.detailTitle = fmt.Sprintf("Pending job %d  %s / %s", q.JobID, q.User, q.Name)
 			m.detailBody = renderQueueDetail(q)
+			m.detailJobID = q.JobID
+			m.detailLogs = nil
+			m.detailLogErr = nil
 			m.detailOpen = true
 		}
 	case tabHistory:
@@ -727,6 +798,10 @@ func (m *model) openDetail() {
 			m.detailOpen = true
 		}
 	}
+	if m.detailJobID > 0 {
+		return m.fetchLogTailCmd(m.detailJobID)
+	}
+	return nil
 }
 
 func detailLine(label, value string) string {
