@@ -35,6 +35,23 @@ func TestRenderSummary_Live(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	jobsAll, err := c.Jobs(ctx, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fmt.Println("=== with -p gpu ===")
+	mDIL := &model{client: c, partition: "gpu", nodes: nodes, jobs: jobs, width: 120, height: 40}
+	mDIL.recordSample()
+	fmt.Println(mDIL.renderSummary(120))
+	fmt.Println()
+
+	fmt.Println("=== without -p (cluster-mode, per-partition cards) ===")
+	mAll := &model{client: c, partition: "", nodes: nodes, jobs: jobsAll, width: 160, height: 40}
+	mAll.recordSample()
+	fmt.Println(mAll.renderSummary(160))
+	fmt.Println()
+
 	m := &model{
 		client:    c,
 		partition: "gpu",

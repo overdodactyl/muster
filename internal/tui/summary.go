@@ -53,25 +53,77 @@ func currentUser() string {
 
 func (m *model) renderSummary(width int) string {
 	parts := aggregate.Partitions(m.nodes, m.jobs, m.partition)
-	var summary aggregate.PartitionSummary
-	label := "All partitions"
-	if m.partition != "" {
-		label = m.partition
-		if len(parts) > 0 {
-			summary = parts[0]
+	user := m.renderUserCard()
+	gap := "  "
+
+	// Cluster-mode (no -p): one compact card per partition, side-by-side.
+	if m.partition == "" {
+		if len(parts) == 0 {
+			return user
 		}
-	} else {
-		summary = aggregateAll(parts)
+		cards := make([]string, 0, len(parts)+2)
+		for _, p := range parts {
+			cards = append(cards, renderCompactPartCard(p))
+			cards = append(cards, gap)
+		}
+		if user != "" {
+			cards = append(cards, user)
+		} else if len(cards) > 0 && cards[len(cards)-1] == gap {
+			cards = cards[:len(cards)-1]
+		}
+		return lipgloss.JoinHorizontal(lipgloss.Top, cards...)
 	}
 
-	left := m.renderPartCard(label, summary)
-	right := m.renderUserCard()
-
-	gap := "   "
-	if right == "" {
+	// -p NAME mode: the full card with sparklines + user card.
+	var summary aggregate.PartitionSummary
+	if len(parts) > 0 {
+		summary = parts[0]
+	}
+	left := m.renderPartCard(m.partition, summary)
+	if user == "" {
 		return left
 	}
-	return lipgloss.JoinHorizontal(lipgloss.Top, left, gap, right)
+	return lipgloss.JoinHorizontal(lipgloss.Top, left, gap, user)
+}
+
+// renderCompactPartCard is the cluster-mode card: no sparkline, smaller bars,
+// designed to fit several side-by-side. ~26 chars wide including borders.
+func renderCompactPartCard(p aggregate.PartitionSummary) string {
+	cpuPct := pct(p.AllocCPUs, p.TotalCPUs)
+	gpuPct := pct(p.AllocGPUs, p.TotalGPUs)
+	memPct := pct(p.AllocMemMB, p.TotalMemMB)
+
+	gpuRow := render.ColorFaint(padRight("GPU", 4)) + render.ColorFaint("  —")
+	if p.TotalGPUs > 0 {
+		model := ""
+		if p.GPUModel != "" {
+			model = " " + p.GPUModel
+		}
+		gpuRow = fmt.Sprintf("%s  %s %s  %s",
+			padRight("GPU", 4),
+			render.Bar(p.AllocGPUs, p.TotalGPUs, 8),
+			fmt.Sprintf("%3d%%", gpuPct),
+			render.ColorFaint(fmt.Sprintf("%d/%d%s", p.AllocGPUs, p.TotalGPUs, model)),
+		)
+	}
+
+	lines := []string{
+		cardTitleStyle.Render(p.Name) + cardCountStyle.Render(fmt.Sprintf("  %dn · %dR/%dPD", p.TotalNodes, p.RunningJobs, p.PendingJobs)),
+		fmt.Sprintf("%s  %s %s  %s",
+			padRight("CPU", 4),
+			render.Bar(p.AllocCPUs, p.TotalCPUs, 8),
+			fmt.Sprintf("%3d%%", cpuPct),
+			render.ColorFaint(fmt.Sprintf("%d/%d", p.AllocCPUs, p.TotalCPUs)),
+		),
+		gpuRow,
+		fmt.Sprintf("%s  %s %s  %s",
+			padRight("Mem", 4),
+			render.Bar(p.AllocMemMB, p.TotalMemMB, 8),
+			fmt.Sprintf("%3d%%", memPct),
+			render.ColorFaint(fmt.Sprintf("%s/%s", render.HumanMB(p.AllocMemMB), render.HumanMB(p.TotalMemMB))),
+		),
+	}
+	return cardStyle.Render(strings.Join(lines, "\n"))
 }
 
 func (m *model) renderPartCard(label string, p aggregate.PartitionSummary) string {
