@@ -338,41 +338,21 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.filterInput.Focus()
 			return m, textinput.Blink
 		case "tab", "right", "l":
-			m.tab = (m.tab + 1) % tabIdx(len(tabNames))
-			m.viewport.GotoTop()
-			m.clampCursor()
+			return m, m.switchTab((m.tab + 1) % tabIdx(len(tabNames)))
 		case "shift+tab", "left", "h":
-			m.tab = (m.tab - 1 + tabIdx(len(tabNames))) % tabIdx(len(tabNames))
-			m.viewport.GotoTop()
-			m.clampCursor()
+			return m, m.switchTab((m.tab - 1 + tabIdx(len(tabNames))) % tabIdx(len(tabNames)))
 		case "1":
-			m.tab = tabPartitions
-			m.viewport.GotoTop()
-			m.clampCursor()
+			return m, m.switchTab(tabPartitions)
 		case "2":
-			m.tab = tabNodes
-			m.viewport.GotoTop()
-			m.clampCursor()
+			return m, m.switchTab(tabNodes)
 		case "3":
-			m.tab = tabJobs
-			m.viewport.GotoTop()
-			m.clampCursor()
+			return m, m.switchTab(tabJobs)
 		case "4":
-			m.tab = tabUsers
-			m.viewport.GotoTop()
-			m.clampCursor()
+			return m, m.switchTab(tabUsers)
 		case "5":
-			m.tab = tabQueue
-			m.viewport.GotoTop()
-			m.clampCursor()
+			return m, m.switchTab(tabQueue)
 		case "6":
-			m.tab = tabHistory
-			m.viewport.GotoTop()
-			m.clampCursor()
-			if !m.acctLoaded && !m.acctInFlight {
-				m.acctInFlight = true
-				return m, m.fetchAcctCmd()
-			}
+			return m, m.switchTab(tabHistory)
 		}
 		// pgup/pgdn/home/end still go to viewport for paging.
 		var cmd tea.Cmd
@@ -515,6 +495,20 @@ func (m *model) maybeFinishLoading() {
 		m.loading = false
 		m.recordSample()
 	}
+}
+
+// switchTab handles all the work that needs to happen when the active tab
+// changes: reset scroll, clamp cursor to new row count, and (lazy) kick off
+// the slow sacct fetch the first time the user lands on History.
+func (m *model) switchTab(t tabIdx) tea.Cmd {
+	m.tab = t
+	m.viewport.GotoTop()
+	m.clampCursor()
+	if t == tabHistory && !m.acctLoaded && !m.acctInFlight {
+		m.acctInFlight = true
+		return m.fetchAcctCmd()
+	}
+	return nil
 }
 
 func (m *model) moveCursor(delta int) {
