@@ -190,9 +190,18 @@ type acctMsg struct {
 type tickMsg time.Time
 
 func (m *model) Init() tea.Cmd {
-	// Defer sacct until the user lands on the History tab or until the
-	// periodic refresh (~1 min in) - it's the slow one.
-	return tea.Batch(m.fetchNodesCmd(), m.fetchJobsCmd(), tickEvery(), m.spinner.Tick)
+	// Fire sacct in parallel with nodes/jobs at startup. It's the slow one
+	// (~20s) so it lands well after the UI is interactive, but if the user
+	// visits History it'll already be there. Marking acctInFlight so a
+	// concurrent switchTab(tabHistory) doesn't kick off a second fetch.
+	m.acctInFlight = true
+	return tea.Batch(
+		m.fetchNodesCmd(),
+		m.fetchJobsCmd(),
+		m.fetchAcctCmd(),
+		tickEvery(),
+		m.spinner.Tick,
+	)
 }
 
 func tickEvery() tea.Cmd {
