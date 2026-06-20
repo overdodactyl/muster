@@ -62,6 +62,7 @@ type Reservation struct {
 
 type AcctJob struct {
 	ID         int64
+	Name       string
 	User       string
 	Account    string
 	Partition  string
@@ -70,6 +71,7 @@ type AcctJob struct {
 	StartTime  time.Time
 	EndTime    time.Time
 	Elapsed    time.Duration
+	TotalCPU   time.Duration // user+system CPU time consumed across all cores
 	AllocTRES  map[string]int
 	ExitCode   int
 }

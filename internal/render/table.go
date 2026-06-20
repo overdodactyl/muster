@@ -189,6 +189,42 @@ func RenderUsers(w io.Writer, rows []aggregate.UserRollup) {
 	t.Render()
 }
 
+func RenderUsage(w io.Writer, rows []aggregate.UsageRow) {
+	if w == nil {
+		w = os.Stdout
+	}
+	if len(rows) == 0 {
+		fmt.Fprintln(w, "no completed jobs in this window")
+		return
+	}
+	t := newTable(w, []string{"USER", "JOBS", "CPU-HRS REQ", "CPU-HRS USED", "EFF%", "WORST JOB"})
+	for _, r := range rows {
+		effStr := fmt.Sprintf("%.0f%%", r.Efficiency)
+		switch {
+		case r.Efficiency >= 75:
+			effStr = ColorGreen(effStr)
+		case r.Efficiency >= 25:
+			effStr = ColorYellow(effStr)
+		default:
+			effStr = ColorRed(effStr)
+		}
+		worst := ColorFaint("-")
+		if r.WorstJobID != 0 {
+			worst = fmt.Sprintf("%d (%.0f%%) %s",
+				r.WorstJobID, r.WorstJobEff, truncate(r.WorstJobName, 22))
+		}
+		t.AppendRow(table.Row{
+			ColorCyan(r.User),
+			r.Jobs,
+			fmt.Sprintf("%.1f", r.CPUHoursReq),
+			fmt.Sprintf("%.1f", r.CPUHoursUsed),
+			effStr,
+			worst,
+		})
+	}
+	t.Render()
+}
+
 func RenderGPUs(w io.Writer, rows []aggregate.GPURow) {
 	if w == nil {
 		w = os.Stdout

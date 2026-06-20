@@ -144,6 +144,7 @@ func parseSacctJobs(b []byte) ([]AcctJob, error) {
 		elapsed := time.Duration(j.Time.Elapsed) * time.Second
 		out = append(out, AcctJob{
 			ID:         j.JobID,
+			Name:       j.Name,
 			User:       j.User,
 			Account:    j.Account,
 			Partition:  j.Partition,
@@ -152,6 +153,7 @@ func parseSacctJobs(b []byte) ([]AcctJob, error) {
 			StartTime:  unixTime(j.Time.Start),
 			EndTime:    unixTime(j.Time.End),
 			Elapsed:    elapsed,
+			TotalCPU:   time.Duration(j.Time.Total.Seconds) * time.Second,
 			AllocTRES:  tresMap(j.Tres.Allocated),
 			ExitCode:   j.ExitCode.ReturnCode.Int(),
 		})

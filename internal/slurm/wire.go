@@ -73,6 +73,7 @@ type sacctWire struct {
 
 type sacctJob struct {
 	JobID     int64  `json:"job_id"`
+	Name      string `json:"name"`
 	User      string `json:"user"`
 	Account   string `json:"account"`
 	Partition string `json:"partition"`
@@ -84,6 +85,9 @@ type sacctJob struct {
 		Start      int64 `json:"start"`
 		End        int64 `json:"end"`
 		Elapsed    int64 `json:"elapsed"`
+		Total      struct {
+			Seconds int64 `json:"seconds"`
+		} `json:"total"`
 	} `json:"time"`
 	Tres struct {
 		Allocated []tresItem `json:"allocated"`
