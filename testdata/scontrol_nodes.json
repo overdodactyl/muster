@@ -1,0 +1,350 @@
+{
+  "nodes": [
+    {
+      "name": "node001a",
+      "state": [
+        "MIXED"
+      ],
+      "partitions": [
+        "cpu"
+      ],
+      "cpus": 96,
+      "alloc_cpus": 10,
+      "idle_cpus": null,
+      "real_memory": 768000,
+      "alloc_memory": 501760,
+      "free_mem": {
+        "set": true,
+        "infinite": false,
+        "number": 147580
+      },
+      "gres": "",
+      "gres_used": "",
+      "reason": "",
+      "cpu_load": 441
+    },
+    {
+      "name": "node002a",
+      "state": [
+        "MIXED"
+      ],
+      "partitions": [
+        "cpu"
+      ],
+      "cpus": 96,
+      "alloc_cpus": 36,
+      "idle_cpus": null,
+      "real_memory": 768000,
+      "alloc_memory": 189440,
+      "free_mem": {
+        "set": true,
+        "infinite": false,
+        "number": 331333
+      },
+      "gres": "",
+      "gres_used": "",
+      "reason": "",
+      "cpu_load": 664
+    },
+    {
+      "name": "node003a",
+      "state": [
+        "MIXED"
+      ],
+      "partitions": [
+        "cpu"
+      ],
+      "cpus": 96,
+      "alloc_cpus": 32,
+      "idle_cpus": null,
+      "real_memory": 2000000,
+      "alloc_memory": 1638400,
+      "free_mem": {
+        "set": true,
+        "infinite": false,
+        "number": 1522916
+      },
+      "gres": "",
+      "gres_used": "",
+      "reason": "",
+      "cpu_load": 406
+    },
+    {
+      "name": "node004a",
+      "state": [
+        "MIXED"
+      ],
+      "partitions": [
+        "cpu"
+      ],
+      "cpus": 96,
+      "alloc_cpus": 8,
+      "idle_cpus": null,
+      "real_memory": 2000000,
+      "alloc_memory": 409600,
+      "free_mem": {
+        "set": true,
+        "infinite": false,
+        "number": 1487894
+      },
+      "gres": "",
+      "gres_used": "",
+      "reason": "",
+      "cpu_load": 114
+    },
+    {
+      "name": "node005a",
+      "state": [
+        "IDLE"
+      ],
+      "partitions": [
+        "ml"
+      ],
+      "cpus": 96,
+      "alloc_cpus": 0,
+      "idle_cpus": null,
+      "real_memory": 1000000,
+      "alloc_memory": 0,
+      "free_mem": {
+        "set": true,
+        "infinite": false,
+        "number": 483346
+      },
+      "gres": "gpu:l40:4",
+      "gres_used": "gpu:l40:0(IDX:N/A)",
+      "reason": "",
+      "cpu_load": 32
+    },
+    {
+      "name": "node006a",
+      "state": [
+        "MIXED"
+      ],
+      "partitions": [
+        "gpu"
+      ],
+      "cpus": 96,
+      "alloc_cpus": 24,
+      "idle_cpus": null,
+      "real_memory": 1000000,
+      "alloc_memory": 196608,
+      "free_mem": {
+        "set": true,
+        "infinite": false,
+        "number": 548475
+      },
+      "gres": "gpu:a100:4",
+      "gres_used": "gpu:a100:3(IDX:0-2)",
+      "reason": "",
+      "cpu_load": 1023
+    },
+    {
+      "name": "node007a",
+      "state": [
+        "MIXED"
+      ],
+      "partitions": [
+        "cpu"
+      ],
+      "cpus": 96,
+      "alloc_cpus": 54,
+      "idle_cpus": null,
+      "real_memory": 768000,
+      "alloc_memory": 497664,
+      "free_mem": {
+        "set": true,
+        "infinite": false,
+        "number": 147460
+      },
+      "gres": "",
+      "gres_used": "",
+      "reason": "",
+      "cpu_load": 1048
+    },
+    {
+      "name": "node008a",
+      "state": [
+        "IDLE"
+      ],
+      "partitions": [
+        "cpu"
+      ],
+      "cpus": 128,
+      "alloc_cpus": 0,
+      "idle_cpus": null,
+      "real_memory": 2000000,
+      "alloc_memory": 0,
+      "free_mem": {
+        "set": true,
+        "infinite": false,
+        "number": 1455739
+      },
+      "gres": "gpu:l40s:4",
+      "gres_used": "gpu:l40s:0(IDX:N/A)",
+      "reason": "",
+      "cpu_load": 86
+    },
+    {
+      "name": "node009a",
+      "state": [
+        "IDLE"
+      ],
+      "partitions": [
+        "cpu"
+      ],
+      "cpus": 128,
+      "alloc_cpus": 0,
+      "idle_cpus": null,
+      "real_memory": 2000000,
+      "alloc_memory": 0,
+      "free_mem": {
+        "set": true,
+        "infinite": false,
+        "number": 1213914
+      },
+      "gres": "gpu:l40s:4",
+      "gres_used": "gpu:l40s:0(IDX:N/A)",
+      "reason": "",
+      "cpu_load": 51
+    },
+    {
+      "name": "node010a",
+      "state": [
+        "IDLE",
+        "RESERVED"
+      ],
+      "partitions": [
+        "cpu"
+      ],
+      "cpus": 128,
+      "alloc_cpus": 0,
+      "idle_cpus": null,
+      "real_memory": 2000000,
+      "alloc_memory": 0,
+      "free_mem": {
+        "set": true,
+        "infinite": false,
+        "number": 1444792
+      },
+      "gres": "gpu:l40s:4",
+      "gres_used": "gpu:l40s:0(IDX:N/A)",
+      "reason": "",
+      "cpu_load": 11
+    },
+    {
+      "name": "node011a",
+      "state": [
+        "IDLE"
+      ],
+      "partitions": [
+        "cpu"
+      ],
+      "cpus": 128,
+      "alloc_cpus": 0,
+      "idle_cpus": null,
+      "real_memory": 2000000,
+      "alloc_memory": 0,
+      "free_mem": {
+        "set": true,
+        "infinite": false,
+        "number": 1441471
+      },
+      "gres": "gpu:l40s:4",
+      "gres_used": "gpu:l40s:0(IDX:N/A)",
+      "reason": "",
+      "cpu_load": 4
+    },
+    {
+      "name": "node012a",
+      "state": [
+        "MIXED"
+      ],
+      "partitions": [
+        "cpu"
+      ],
+      "cpus": 96,
+      "alloc_cpus": 74,
+      "idle_cpus": null,
+      "real_memory": 2000000,
+      "alloc_memory": 1945600,
+      "free_mem": {
+        "set": true,
+        "infinite": false,
+        "number": 308367
+      },
+      "gres": "",
+      "gres_used": "",
+      "reason": "",
+      "cpu_load": 304
+    },
+    {
+      "name": "node013a",
+      "state": [
+        "MIXED"
+      ],
+      "partitions": [
+        "gpu"
+      ],
+      "cpus": 128,
+      "alloc_cpus": 82,
+      "idle_cpus": null,
+      "real_memory": 500000,
+      "alloc_memory": 468992,
+      "free_mem": {
+        "set": true,
+        "infinite": false,
+        "number": 7147
+      },
+      "gres": "",
+      "gres_used": "",
+      "reason": "",
+      "cpu_load": 218
+    },
+    {
+      "name": "node014a",
+      "state": [
+        "MIXED"
+      ],
+      "partitions": [
+        "gpu"
+      ],
+      "cpus": 128,
+      "alloc_cpus": 12,
+      "idle_cpus": null,
+      "real_memory": 500000,
+      "alloc_memory": 32768,
+      "free_mem": {
+        "set": true,
+        "infinite": false,
+        "number": 114908
+      },
+      "gres": "",
+      "gres_used": "",
+      "reason": "",
+      "cpu_load": 11
+    },
+    {
+      "name": "node015a",
+      "state": [
+        "IDLE"
+      ],
+      "partitions": [
+        "ml"
+      ],
+      "cpus": 128,
+      "alloc_cpus": 0,
+      "idle_cpus": null,
+      "real_memory": 1000000,
+      "alloc_memory": 0,
+      "free_mem": {
+        "set": true,
+        "infinite": false,
+        "number": 118488
+      },
+      "gres": "gpu:h100:3",
+      "gres_used": "gpu:h100:0(IDX:N/A)",
+      "reason": "",
+      "cpu_load": 591
+    }
+  ]
+}
