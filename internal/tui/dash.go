@@ -1847,7 +1847,11 @@ func (m *model) renderTabBody() string {
 		expand := false
 		if m.arrayDrill != 0 {
 			expand = true
-			filtered := jobs[:0]
+			// Fresh slice; reusing m.jobs's backing array as `m.jobs[:0]`
+			// would overwrite the model's persistent state in-place — the
+			// filter loop's range iterator and the append target alias the
+			// same memory, so later renders see scrambled data.
+			var filtered []slurm.Job
 			for _, j := range jobs {
 				if j.ArrayJobID == m.arrayDrill {
 					filtered = append(filtered, j)
@@ -1912,7 +1916,8 @@ func (m *model) renderTabBody() string {
 		expand := false
 		if m.arrayDrill != 0 {
 			expand = true
-			filtered := queueJobs[:0]
+			// Fresh slice — see comment in tabJobs above.
+			var filtered []slurm.Job
 			for _, j := range queueJobs {
 				if j.ArrayJobID == m.arrayDrill {
 					filtered = append(filtered, j)
