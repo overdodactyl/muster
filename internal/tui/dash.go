@@ -47,18 +47,25 @@ func Run(client slurm.Client, partition string) error {
 	ti.CharLimit = 80
 	ti.Width = 40
 
+	lti := textinput.New()
+	lti.Prompt = "/ "
+	lti.Placeholder = "search in log (n/N jump, esc clear)"
+	lti.CharLimit = 200
+	lti.Width = 50
+
 	sp := spinner.New()
 	sp.Spinner = spinner.Dot
 	sp.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("63"))
 
 	m := &model{
-		client:      client,
-		partition:   partition,
-		loading:     true,
-		filterInput: ti,
-		spinner:     sp,
-		cursor:      map[tabIdx]int{},
-		rowCounts:   map[tabIdx]int{},
+		client:         client,
+		partition:      partition,
+		loading:        true,
+		filterInput:    ti,
+		logSearchInput: lti,
+		spinner:        sp,
+		cursor:         map[tabIdx]int{},
+		rowCounts:      map[tabIdx]int{},
 	}
 	p := tea.NewProgram(m,
 		tea.WithAltScreen(),
@@ -123,6 +130,13 @@ type model struct {
 	detailLogErr   error
 	detailViewport viewport.Model // scrollable log viewer (jobs/queue only)
 	detailVPReady  bool
+
+	// In-log search (active only while the log viewer is open).
+	logSearch       string
+	logSearchMode   bool
+	logSearchInput  textinput.Model
+	logMatchLines   []int // wrapped-line indices that contain a match
+	logMatchCursor  int   // index into logMatchLines for n/N navigation
 
 	confirmCancelID    int64
 	confirmCancelName  string
@@ -289,25 +303,64 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.showHelp = false
 			return m, nil
 		}
-		// Detail overlay key handling:
-		//   esc / q       close
-		//   ctrl+c        quit the app
-		//   When the detail is a job (jobID > 0): scroll keys route to the
-		//   embedded log viewport instead of dismissing.
+		// Detail overlay key handling.
 		if m.detailOpen {
+			// Search-input mode swallows keystrokes (esc clears, enter exits).
+			if m.logSearchMode {
+				switch msg.String() {
+				case "esc":
+					m.logSearch = ""
+					m.logSearchInput.SetValue("")
+					m.logSearchInput.Blur()
+					m.logSearchMode = false
+					m.logMatchLines = nil
+					m.logMatchCursor = 0
+					m.updateDetailViewportContent()
+					return m, nil
+				case "enter":
+					m.logSearchMode = false
+					m.logSearchInput.Blur()
+					return m, nil
+				}
+				var cmd tea.Cmd
+				m.logSearchInput, cmd = m.logSearchInput.Update(msg)
+				m.logSearch = strings.TrimSpace(m.logSearchInput.Value())
+				m.logMatchCursor = 0
+				m.updateDetailViewportContent()
+				m.jumpToCurrentMatch()
+				return m, cmd
+			}
 			switch msg.String() {
 			case "esc", "q":
 				m.detailOpen = false
 				return m, nil
 			case "ctrl+c":
 				return m, tea.Quit
+			case "/":
+				if m.detailJobID > 0 {
+					m.logSearchMode = true
+					m.logSearchInput.SetValue(m.logSearch)
+					m.logSearchInput.Focus()
+					return m, textinput.Blink
+				}
+			case "n":
+				if m.detailJobID > 0 && len(m.logMatchLines) > 0 {
+					m.logMatchCursor = (m.logMatchCursor + 1) % len(m.logMatchLines)
+					m.jumpToCurrentMatch()
+					return m, nil
+				}
+			case "N":
+				if m.detailJobID > 0 && len(m.logMatchLines) > 0 {
+					m.logMatchCursor = (m.logMatchCursor - 1 + len(m.logMatchLines)) % len(m.logMatchLines)
+					m.jumpToCurrentMatch()
+					return m, nil
+				}
 			}
 			if m.detailJobID > 0 {
 				var cmd tea.Cmd
 				m.detailViewport, cmd = m.detailViewport.Update(msg)
 				return m, cmd
 			}
-			// Non-job overlays still dismiss on any other key.
 			m.detailOpen = false
 			return m, nil
 		}
@@ -782,7 +835,19 @@ func (m *model) renderDetailOverlay(maxHeight int) string {
 		logHeader += "  " + render.ColorFaint(m.detailLogPath)
 	}
 
-	hint := render.ColorFaint("↑/↓/k/j scroll · pgup/pgdn page · g/G top/end · esc close")
+	var hint string
+	if m.logSearchMode {
+		hint = m.logSearchInput.View()
+	} else if m.logSearch != "" {
+		match := "no match"
+		if len(m.logMatchLines) > 0 {
+			match = fmt.Sprintf("match %d/%d", m.logMatchCursor+1, len(m.logMatchLines))
+		}
+		hint = render.ColorFaint("/"+m.logSearch+"  ") + render.ColorYellow(match) +
+			render.ColorFaint("  · n/N next/prev · esc clear · ↑/↓ scroll")
+	} else {
+		hint = render.ColorFaint("↑/↓/k/j scroll · pgup/pgdn page · g/G top/end · / search · esc close")
+	}
 
 	headerH := lipgloss.Height(header) + lipgloss.Height(logHeader) + lipgloss.Height(hint) + 2 // 2 blank lines
 	vpHeight := maxHeight - headerH
@@ -808,8 +873,9 @@ func (m *model) renderDetailOverlay(maxHeight int) string {
 }
 
 // updateDetailViewportContent rebuilds the viewport's content from
-// m.detailLogs and (lipgloss-)wraps long lines to fit the current width so
-// nothing gets cut off when squeue prints a multi-K-character line.
+// m.detailLogs, hard-wraps long lines to fit, and (if a search term is
+// active) highlights matches and records their wrapped-line indices for
+// n/N navigation.
 func (m *model) updateDetailViewportContent() {
 	if !m.detailVPReady {
 		return
@@ -818,20 +884,113 @@ func (m *model) updateDetailViewportContent() {
 	if wrapWidth < 20 {
 		wrapWidth = 20
 	}
+	m.logMatchLines = nil
+
 	switch {
 	case m.detailLogErr != nil:
 		m.detailViewport.SetContent(render.ColorFaint("(" + m.detailLogErr.Error() + ")"))
+		return
 	case m.detailLogs == nil:
 		m.detailViewport.SetContent(render.ColorFaint("loading…"))
+		return
 	case len(m.detailLogs) == 0 || (len(m.detailLogs) == 1 && m.detailLogs[0] == ""):
 		m.detailViewport.SetContent(render.ColorFaint("(empty)"))
-	default:
-		wrap := lipgloss.NewStyle().Width(wrapWidth)
-		body := wrap.Render(strings.Join(m.detailLogs, "\n"))
-		// Anchor view at the bottom so newest lines land in view, like tail -f.
-		m.detailViewport.SetContent(body)
+		return
+	}
+
+	var wrapped []string
+	for _, raw := range m.detailLogs {
+		for _, chunk := range hardWrap(raw, wrapWidth) {
+			wrapped = append(wrapped, chunk)
+		}
+	}
+
+	atBottom := m.detailViewport.AtBottom()
+	if m.logSearch != "" {
+		needleLower := strings.ToLower(m.logSearch)
+		highlighted := make([]string, len(wrapped))
+		for i, line := range wrapped {
+			lower := strings.ToLower(line)
+			if !strings.Contains(lower, needleLower) {
+				highlighted[i] = line
+				continue
+			}
+			m.logMatchLines = append(m.logMatchLines, i)
+			highlighted[i] = highlightMatches(line, m.logSearch)
+		}
+		m.detailViewport.SetContent(strings.Join(highlighted, "\n"))
+	} else {
+		m.detailViewport.SetContent(strings.Join(wrapped, "\n"))
+	}
+
+	if atBottom && m.logSearch == "" {
 		m.detailViewport.GotoBottom()
 	}
+}
+
+// hardWrap splits s into chunks no longer than width runes. ASCII-clean
+// logs use one byte per rune so this is byte-safe in practice.
+func hardWrap(s string, width int) []string {
+	if width <= 0 {
+		return []string{s}
+	}
+	r := []rune(s)
+	if len(r) <= width {
+		return []string{s}
+	}
+	var out []string
+	for len(r) > width {
+		out = append(out, string(r[:width]))
+		r = r[width:]
+	}
+	if len(r) > 0 {
+		out = append(out, string(r))
+	}
+	return out
+}
+
+// highlightMatches wraps every case-insensitive occurrence of needle in line
+// with a bold-yellow ANSI envelope.
+func highlightMatches(line, needle string) string {
+	if needle == "" {
+		return line
+	}
+	const onLeft = "\x1b[1;43;30m"  // bold black-on-yellow
+	const onRight = "\x1b[0m"
+	lower := strings.ToLower(line)
+	nlower := strings.ToLower(needle)
+	var b strings.Builder
+	for {
+		i := strings.Index(lower, nlower)
+		if i < 0 {
+			b.WriteString(line)
+			return b.String()
+		}
+		b.WriteString(line[:i])
+		b.WriteString(onLeft)
+		b.WriteString(line[i : i+len(needle)])
+		b.WriteString(onRight)
+		line = line[i+len(needle):]
+		lower = lower[i+len(needle):]
+	}
+}
+
+// jumpToCurrentMatch scrolls the log viewport so the active match (per
+// m.logMatchCursor) is centered.
+func (m *model) jumpToCurrentMatch() {
+	if !m.detailVPReady || len(m.logMatchLines) == 0 {
+		return
+	}
+	if m.logMatchCursor >= len(m.logMatchLines) {
+		m.logMatchCursor = 0
+	}
+	line := m.logMatchLines[m.logMatchCursor]
+	half := m.detailViewport.Height / 2
+	off := line - half
+	if off < 0 {
+		off = 0
+	}
+	m.detailViewport.SetYOffset(off)
 }
 
 // openDetail prepares the detail overlay for the current cursor row and
