@@ -44,26 +44,30 @@ type squeueWire struct {
 }
 
 type squeueJob struct {
-	JobID         int64    `json:"job_id"`
-	UserName      string   `json:"user_name"`
-	Account       string   `json:"account"`
-	Name          string   `json:"name"`
-	Partition     string   `json:"partition"`
-	JobState      []string `json:"job_state"`
-	StateReason   string   `json:"state_reason"`
-	Nodes         string   `json:"nodes"`
-	NodeCount     slurmNum `json:"node_count"`
-	CPUs          slurmNum `json:"cpus"`
-	MemoryPerCPU  slurmNum `json:"memory_per_cpu"`
-	MemoryPerNode slurmNum `json:"memory_per_node"`
-	TresPerNode   string   `json:"tres_per_node"`
-	TresPerJob    string   `json:"tres_per_job"`
-	GRESDetail    []string `json:"gres_detail"`
-	SubmitTime    slurmNum `json:"submit_time"`
-	StartTime     slurmNum `json:"start_time"`
-	EndTime       slurmNum `json:"end_time"`
-	Priority      slurmNum `json:"priority"`
-	TimeLimit     slurmNum `json:"time_limit"`
+	JobID                   int64    `json:"job_id"`
+	UserName                string   `json:"user_name"`
+	Account                 string   `json:"account"`
+	Name                    string   `json:"name"`
+	Partition               string   `json:"partition"`
+	JobState                []string `json:"job_state"`
+	StateReason             string   `json:"state_reason"`
+	Nodes                   string   `json:"nodes"`
+	NodeCount               slurmNum `json:"node_count"`
+	CPUs                    slurmNum `json:"cpus"`
+	MemoryPerCPU            slurmNum `json:"memory_per_cpu"`
+	MemoryPerNode           slurmNum `json:"memory_per_node"`
+	TresPerNode             string   `json:"tres_per_node"`
+	TresPerJob              string   `json:"tres_per_job"`
+	GRESDetail              []string `json:"gres_detail"`
+	SubmitTime              slurmNum `json:"submit_time"`
+	StartTime               slurmNum `json:"start_time"`
+	EndTime                 slurmNum `json:"end_time"`
+	Priority                slurmNum `json:"priority"`
+	TimeLimit               slurmNum `json:"time_limit"`
+	StandardOutput          string   `json:"standard_output"`
+	StandardError           string   `json:"standard_error"`
+	CurrentWorkingDirectory string   `json:"current_working_directory"`
+	Command                 string   `json:"command"`
 }
 
 // sacct --json

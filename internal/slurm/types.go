@@ -40,6 +40,17 @@ type Job struct {
 	TimeLimit   time.Duration
 }
 
+// JobDetail is the extra info available via `scontrol show job <id>` that
+// squeue's listing doesn't surface: stdout/stderr paths, working dir,
+// command, etc.
+type JobDetail struct {
+	Job
+	StandardOutput          string
+	StandardError           string
+	CurrentWorkingDirectory string
+	Command                 string
+}
+
 type Partition struct {
 	Name    string
 	Nodes   []string

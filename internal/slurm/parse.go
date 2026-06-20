@@ -130,6 +130,55 @@ func parseScontrolReservations(b []byte) ([]Reservation, error) {
 	return out, nil
 }
 
+// parseScontrolJobDetail returns the first job in the list (the one requested
+// by id), enriched with stdout/stderr/cwd/command fields.
+func parseScontrolJobDetail(b []byte) (JobDetail, error) {
+	var w squeueWire
+	if err := decodeJSON(b, &w); err != nil {
+		return JobDetail{}, err
+	}
+	if len(w.Jobs) == 0 {
+		return JobDetail{}, fmt.Errorf("scontrol returned no job")
+	}
+	j := w.Jobs[0]
+	state := ""
+	if len(j.JobState) > 0 {
+		state = j.JobState[0]
+	}
+	gres := j.TresPerNode
+	if gres == "" {
+		gres = j.TresPerJob
+	}
+	d := JobDetail{
+		Job: Job{
+			ID:          j.JobID,
+			User:        j.UserName,
+			Account:     j.Account,
+			Name:        j.Name,
+			Partition:   j.Partition,
+			State:       state,
+			Reason:      j.StateReason,
+			Nodes:       j.Nodes,
+			NodeCount:   j.NodeCount.Int(),
+			CPUs:        j.CPUs.Int(),
+			MemPerCPU:   j.MemoryPerCPU.Int(),
+			MemPerNode:  j.MemoryPerNode.Int(),
+			GRESPerNode: gres,
+			GRESDetail:  j.GRESDetail,
+			SubmitTime:  j.SubmitTime.Time(),
+			StartTime:   j.StartTime.Time(),
+			EndTime:     j.EndTime.Time(),
+			Priority:    int64(j.Priority.Int()),
+			TimeLimit:   time.Duration(j.TimeLimit.Int()) * time.Minute,
+		},
+		StandardOutput:          j.StandardOutput,
+		StandardError:           j.StandardError,
+		CurrentWorkingDirectory: j.CurrentWorkingDirectory,
+		Command:                 j.Command,
+	}
+	return d, nil
+}
+
 func parseSacctJobs(b []byte) ([]AcctJob, error) {
 	var w sacctWire
 	if err := decodeJSON(b, &w); err != nil {

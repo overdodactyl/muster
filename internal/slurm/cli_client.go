@@ -84,6 +84,14 @@ func (c *cliClient) Cancel(ctx context.Context, jobID int64) error {
 	return err
 }
 
+func (c *cliClient) JobDetail(ctx context.Context, jobID int64) (JobDetail, error) {
+	out, err := c.run(ctx, c.scontrol, "show", "job", fmt.Sprintf("%d", jobID), "--json")
+	if err != nil {
+		return JobDetail{}, err
+	}
+	return parseScontrolJobDetail(out)
+}
+
 func (c *cliClient) Reservations(ctx context.Context) ([]Reservation, error) {
 	out, err := c.run(ctx, c.scontrol, "show", "reservation", "--json")
 	if err != nil {
