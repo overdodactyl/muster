@@ -529,7 +529,7 @@ func RenderHistory(w io.Writer, rows []aggregate.HistoryRow, keyHeader, subtitle
 	if keyHeader == "" {
 		keyHeader = "KEY"
 	}
-	t := newTable(w, []string{strings.ToUpper(keyHeader), "JOBS", "DONE", "FAIL", "TO", "CANC", "CPU-HOURS", "GPU-HOURS"})
+	t := newTable(w, []string{strings.ToUpper(keyHeader), "JOBS", "DONE", "FAIL", "TIMEOUT", "CANCEL", "CPU-HOURS", "GPU-HOURS"})
 	for _, r := range rows {
 		fail := fmt.Sprintf("%d", r.Failed)
 		if r.Failed > 0 {
