@@ -94,6 +94,17 @@ func (c *cliClient) JobDetail(ctx context.Context, jobID int64) (JobDetail, erro
 	return parseScontrolJobDetail(out)
 }
 
+// ClusterName extracts the Slurm cluster name from sinfo --json's meta block.
+// Every Slurm JSON response carries it; reusing sinfo (fast, ~20ms) avoids a
+// second scontrol call.
+func (c *cliClient) ClusterName(ctx context.Context) (string, error) {
+	out, err := c.run(ctx, c.sinfo, "--json")
+	if err != nil {
+		return "", err
+	}
+	return parseClusterName(out)
+}
+
 // JobEfficiency calls `sstat` on the .batch step and parses cumulative CPU
 // time + peak RSS. Returns zero-value (no error) if the step isn't present
 // (interactive jobs, non-batch wrappers).

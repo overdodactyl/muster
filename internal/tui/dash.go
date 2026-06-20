@@ -76,8 +76,9 @@ func Run(client slurm.Client, partition string) error {
 }
 
 type model struct {
-	client    slurm.Client
-	partition string
+	client      slurm.Client
+	partition   string
+	clusterName string // populated by clusterMsg on startup
 
 	tab    tabIdx
 	width  int
@@ -234,6 +235,7 @@ func (m *model) Init() tea.Cmd {
 		m.fetchNodesCmd(),
 		m.fetchJobsCmd(),
 		m.fetchAcctCmd(),
+		m.fetchClusterCmd(),
 		tickEvery(),
 		m.spinner.Tick,
 	)
@@ -531,6 +533,12 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, tea.Batch(cmds...)
 
+	case clusterMsg:
+		if msg.err == nil && msg.name != "" {
+			m.clusterName = msg.name
+		}
+		return m, nil
+
 	case spinner.TickMsg:
 		var cmd tea.Cmd
 		m.spinner, cmd = m.spinner.Update(msg)
@@ -614,6 +622,21 @@ type effMsg struct {
 	jobID int64
 	eff   slurm.JobEfficiency
 	err   error
+}
+
+type clusterMsg struct {
+	name string
+	err  error
+}
+
+func (m *model) fetchClusterCmd() tea.Cmd {
+	c := m.client
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		n, err := c.ClusterName(ctx)
+		return clusterMsg{name: n, err: err}
+	}
 }
 
 func (m *model) fetchEfficiencyCmd(jobID int64) tea.Cmd {
@@ -1476,8 +1499,11 @@ var (
 )
 
 func (m *model) renderHeader() string {
-	title := titleStyle.Render(" muster ")
+	// Top strip: cluster · timestamp · user. Self-documents screenshots of
+	// the dashboard.
+	strip := m.renderClusterStrip()
 
+	title := titleStyle.Render(" muster ")
 	var tabs []string
 	for i, name := range tabNames {
 		label := " " + name + " "
@@ -1491,7 +1517,35 @@ func (m *model) renderHeader() string {
 		tabs = append(tabs, style.Render(label))
 	}
 	bar := lipgloss.JoinHorizontal(lipgloss.Bottom, tabs...)
-	return lipgloss.JoinHorizontal(lipgloss.Bottom, title, " ", bar)
+	tabBar := lipgloss.JoinHorizontal(lipgloss.Bottom, title, " ", bar)
+
+	if strip == "" {
+		return tabBar
+	}
+	return lipgloss.JoinVertical(lipgloss.Left, strip, tabBar)
+}
+
+func (m *model) renderClusterStrip() string {
+	cluster := m.clusterName
+	if cluster == "" {
+		cluster = "slurm"
+	}
+	user := currentUser()
+	if user == "" {
+		user = "?"
+	}
+	// Avoid Date.Now() in production code paths if anyone reuses this in
+	// snapshot mode — use lastFetch when present, falling back to a literal.
+	ts := m.lastFetch
+	if ts.IsZero() {
+		ts = time.Now()
+	}
+	parts := []string{
+		render.Bold(cluster),
+		render.ColorFaint(ts.Format("2006-01-02 15:04:05")),
+		render.ColorFaint(user),
+	}
+	return clusterStripStyle.Render(strings.Join(parts, "  ·  "))
 }
 
 // renderTabBody produces the full unscrolled table for the active tab.
@@ -1770,4 +1824,6 @@ var (
 			Background(lipgloss.Color("236"))
 	footerStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("245"))
+	clusterStripStyle = lipgloss.NewStyle().
+				Padding(0, 1)
 )

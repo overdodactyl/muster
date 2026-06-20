@@ -15,6 +15,21 @@ func decodeJSON(b []byte, dst any) error {
 	return json.Unmarshal(b, dst)
 }
 
+// parseClusterName extracts .meta.slurm.cluster from any Slurm --json response.
+func parseClusterName(b []byte) (string, error) {
+	var w struct {
+		Meta struct {
+			Slurm struct {
+				Cluster string `json:"cluster"`
+			} `json:"slurm"`
+		} `json:"meta"`
+	}
+	if err := decodeJSON(b, &w); err != nil {
+		return "", err
+	}
+	return w.Meta.Slurm.Cluster, nil
+}
+
 func parseScontrolNodes(b []byte) ([]Node, error) {
 	var w scontrolNodeWire
 	if err := decodeJSON(b, &w); err != nil {
