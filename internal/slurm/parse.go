@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -123,6 +124,7 @@ func parseSqueueJobs(b []byte) ([]Job, error) {
 			TimeLimit:   time.Duration(j.TimeLimit.Int()) * time.Minute,
 			ArrayJobID:  int64(j.ArrayJobID.Int()),
 			ArrayTaskID: arrayTask,
+			Dependency:  j.Dependency,
 		})
 	}
 	return out, nil
@@ -149,6 +151,53 @@ func parseScontrolReservations(b []byte) ([]Reservation, error) {
 		})
 	}
 	return out, nil
+}
+
+// ParseDependency splits a Slurm dependency string into structured entries.
+//
+//	"afterok:12345"                           -> [{afterok, [12345], ""}]
+//	"afterany:12345:67890"                    -> [{afterany, [12345, 67890], ""}]
+//	"afterok:12345(unfulfilled)"              -> [{afterok, [12345], "unfulfilled"}]
+//	"afterok:12345,afterany:67890"            -> two entries
+//
+// Each ID is returned as a string (preserves array suffixes like "_5" / "_*").
+func ParseDependency(s string) []DependencyEntry {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil
+	}
+	var out []DependencyEntry
+	for _, raw := range strings.Split(s, ",") {
+		raw = strings.TrimSpace(raw)
+		if raw == "" {
+			continue
+		}
+		annot := ""
+		if open := strings.LastIndex(raw, "("); open >= 0 {
+			close := strings.LastIndex(raw, ")")
+			if close > open {
+				annot = raw[open+1 : close]
+				raw = raw[:open]
+			}
+		}
+		parts := strings.Split(raw, ":")
+		if len(parts) < 2 {
+			continue
+		}
+		out = append(out, DependencyEntry{
+			Kind:      parts[0],
+			IDs:       parts[1:],
+			Annotation: annot,
+		})
+	}
+	return out
+}
+
+// DependencyEntry is one parsed dependency clause.
+type DependencyEntry struct {
+	Kind       string   // afterok / afterany / after / afternotok / aftercorr / ...
+	IDs        []string // raw IDs, possibly with _N or _* array suffixes
+	Annotation string   // "unfulfilled" if present, else ""
 }
 
 // parseScontrolJobDetail returns the first job in the list (the one requested

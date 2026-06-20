@@ -1181,6 +1181,9 @@ func (m *model) renderDetailOverlay(maxHeight int) string {
 	if histLine := m.formatHistoryLine(); histLine != "" {
 		headerLines = append(headerLines, histLine)
 	}
+	for _, line := range m.formatDependencyLines() {
+		headerLines = append(headerLines, line)
+	}
 	if m.detailCWD != "" {
 		headerLines = append(headerLines, detailLine("cwd", m.detailCWD))
 	}
@@ -1648,6 +1651,96 @@ func (m *model) formatEfficiencyLine() string {
 		parts = append(parts, "trend "+spark)
 	}
 	return detailLine("live", strings.Join(parts, " · "))
+}
+
+// formatDependencyLines builds the 'depends on' / 'blocks' detail lines for
+// the currently-selected job. Looks up the dependency string from the
+// matching squeue entry and the inverse (jobs whose dependency mentions this
+// one) from the rest of m.jobs.
+func (m *model) formatDependencyLines() []string {
+	if m.detailJobID == 0 {
+		return nil
+	}
+	var dep string
+	for _, j := range m.jobs {
+		if j.ID == m.detailJobID {
+			dep = j.Dependency
+			break
+		}
+	}
+
+	var lines []string
+	if dep != "" {
+		entries := slurm.ParseDependency(dep)
+		parts := []string{}
+		for _, e := range entries {
+			for _, id := range e.IDs {
+				st := m.lookupJobStateString(id)
+				bit := fmt.Sprintf("%s %s", e.Kind, id)
+				if st != "" {
+					bit += " " + st
+				}
+				if e.Annotation != "" {
+					bit += " " + render.ColorYellow("("+e.Annotation+")")
+				}
+				parts = append(parts, bit)
+			}
+		}
+		if len(parts) == 0 {
+			parts = append(parts, dep)
+		}
+		lines = append(lines, detailLine("depends on", strings.Join(parts, " · ")))
+	}
+
+	// Inverse: who depends on me?
+	myIDStr := fmt.Sprintf("%d", m.detailJobID)
+	var blocked []string
+	for _, j := range m.jobs {
+		if j.ID == m.detailJobID || j.Dependency == "" {
+			continue
+		}
+		// Quick contains-check; ParseDependency for precision.
+		if !strings.Contains(j.Dependency, myIDStr) {
+			continue
+		}
+		entries := slurm.ParseDependency(j.Dependency)
+		for _, e := range entries {
+			for _, id := range e.IDs {
+				if strings.HasPrefix(id, myIDStr) {
+					name := j.Name
+					if name == "" {
+						name = "?"
+					}
+					blocked = append(blocked, fmt.Sprintf("%d %s (%s)", j.ID, render.ColorFaint(name), j.State))
+				}
+			}
+		}
+	}
+	if len(blocked) > 0 {
+		lines = append(lines, detailLine("blocks", strings.Join(blocked, " · ")))
+	}
+	return lines
+}
+
+// lookupJobStateString returns "(RUNNING)" / "(PENDING)" / "" for an ID string
+// (possibly with array suffix like _5 or _*). Tries the parent ID by
+// stripping the suffix when an exact match fails.
+func (m *model) lookupJobStateString(id string) string {
+	base := id
+	if i := strings.Index(base, "_"); i >= 0 {
+		base = base[:i]
+	}
+	var parsed int64
+	fmt.Sscanf(base, "%d", &parsed)
+	if parsed == 0 {
+		return ""
+	}
+	for _, j := range m.jobs {
+		if j.ID == parsed || j.ArrayJobID == parsed {
+			return "(" + j.State + ")"
+		}
+	}
+	return ""
 }
 
 // formatGPUUtilLine renders one entry per assigned GPU with compute% and
