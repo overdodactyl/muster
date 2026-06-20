@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
@@ -45,11 +46,16 @@ func Run(client slurm.Client, partition string) error {
 	ti.CharLimit = 80
 	ti.Width = 40
 
+	sp := spinner.New()
+	sp.Spinner = spinner.Dot
+	sp.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("63"))
+
 	m := &model{
 		client:      client,
 		partition:   partition,
 		loading:     true,
 		filterInput: ti,
+		spinner:     sp,
 	}
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	_, err := p.Run()
@@ -69,6 +75,11 @@ type model struct {
 	jobs  []slurm.Job
 	acct  []slurm.AcctJob
 
+	nodesLoaded bool
+	jobsLoaded  bool
+	acctLoaded  bool
+	acctInFlight bool
+
 	history []historySample
 
 	sortIndex map[tabIdx]int
@@ -80,6 +91,8 @@ type model struct {
 
 	viewport      viewport.Model
 	viewportReady bool
+
+	spinner spinner.Model
 
 	loading   bool
 	lastErr   error
@@ -125,58 +138,65 @@ type historySample struct {
 
 const maxHistory = 60 // 60 ticks × 10s = 10 min of trend data
 
-type dataMsg struct {
-	nodes      []slurm.Node
-	jobs       []slurm.Job
-	acct       []slurm.AcctJob
-	hasAcct    bool
-	err        error
-	when       time.Time
+// Fetch results: one message per Slurm resource. tea.Batch starts each
+// underlying cobra in its own goroutine, so nodes/jobs/acct run in parallel.
+type nodesMsg struct {
+	nodes []slurm.Node
+	err   error
+	when  time.Time
+}
+type jobsMsg struct {
+	jobs []slurm.Job
+	err  error
+	when time.Time
+}
+type acctMsg struct {
+	acct []slurm.AcctJob
+	err  error
+	when time.Time
 }
 
 type tickMsg time.Time
 
 func (m *model) Init() tea.Cmd {
-	return tea.Batch(m.fetchCmd(true), tickEvery())
+	// Defer sacct until the user lands on the History tab or until the
+	// periodic refresh (~1 min in) - it's the slow one.
+	return tea.Batch(m.fetchNodesCmd(), m.fetchJobsCmd(), tickEvery(), m.spinner.Tick)
 }
 
 func tickEvery() tea.Cmd {
 	return tea.Tick(refreshInterval, func(t time.Time) tea.Msg { return tickMsg(t) })
 }
 
-func (m *model) fetchCmd(includeHistory bool) tea.Cmd {
-	partition := m.partition
-	client := m.client
+func (m *model) fetchNodesCmd() tea.Cmd {
+	c := m.client
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
+		n, err := c.Nodes(ctx)
+		return nodesMsg{nodes: n, err: err, when: time.Now()}
+	}
+}
 
-		msg := dataMsg{when: time.Now()}
+func (m *model) fetchJobsCmd() tea.Cmd {
+	c := m.client
+	p := m.partition
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		j, err := c.Jobs(ctx, p)
+		return jobsMsg{jobs: j, err: err, when: time.Now()}
+	}
+}
 
-		nodes, err := client.Nodes(ctx)
-		if err != nil {
-			msg.err = err
-			return msg
-		}
-		msg.nodes = nodes
-
-		jobs, err := client.Jobs(ctx, partition)
-		if err != nil {
-			msg.err = err
-			return msg
-		}
-		msg.jobs = jobs
-
-		if includeHistory {
-			acctCtx, acctCancel := context.WithTimeout(context.Background(), 60*time.Second)
-			defer acctCancel()
-			if acct, err := client.Accounting(acctCtx, defaultHistoryWindow, partition); err == nil {
-				msg.acct = acct
-				msg.hasAcct = true
-			}
-		}
-
-		return msg
+func (m *model) fetchAcctCmd() tea.Cmd {
+	c := m.client
+	p := m.partition
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+		defer cancel()
+		a, err := c.Accounting(ctx, defaultHistoryWindow, p)
+		return acctMsg{acct: a, err: err, when: time.Now()}
 	}
 }
 
@@ -223,7 +243,12 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.showHelp = true
 		case "r":
 			m.loading = true
-			return m, m.fetchCmd(true)
+			cmds := []tea.Cmd{m.fetchNodesCmd(), m.fetchJobsCmd()}
+			if m.acctLoaded || m.tab == tabHistory {
+				m.acctInFlight = true
+				cmds = append(cmds, m.fetchAcctCmd())
+			}
+			return m, tea.Batch(cmds...)
 		case "s":
 			m.cycleSort()
 		case "/":
@@ -255,31 +280,75 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "6":
 			m.tab = tabHistory
 			m.viewport.GotoTop()
+			if !m.acctLoaded && !m.acctInFlight {
+				m.acctInFlight = true
+				return m, m.fetchAcctCmd()
+			}
 		}
 		// Delegate remaining keys (j/k/up/down/pgup/pgdn/home/end) to viewport.
 		var cmd tea.Cmd
 		m.viewport, cmd = m.viewport.Update(msg)
 		return m, cmd
 
-	case dataMsg:
+	case nodesMsg:
 		m.nodes = msg.nodes
-		m.jobs = msg.jobs
-		if msg.hasAcct {
-			m.acct = msg.acct
+		m.nodesLoaded = true
+		if msg.err != nil {
+			m.lastErr = msg.err
+		} else {
+			m.lastErr = nil
 		}
-		m.lastErr = msg.err
 		m.lastFetch = msg.when
-		m.loading = false
-		m.recordSample()
+		m.maybeFinishLoading()
+
+	case jobsMsg:
+		m.jobs = msg.jobs
+		m.jobsLoaded = true
+		if msg.err != nil {
+			m.lastErr = msg.err
+		} else {
+			m.lastErr = nil
+		}
+		m.lastFetch = msg.when
+		m.maybeFinishLoading()
+
+	case acctMsg:
+		m.acct = msg.acct
+		m.acctLoaded = true
+		m.acctInFlight = false
+		if msg.err != nil {
+			m.lastErr = msg.err
+		}
+		m.lastFetch = msg.when
 
 	case tickMsg:
 		m.ticks++
 		m.loading = true
-		includeHistory := m.ticks%historyRefreshEvery == 0
-		return m, tea.Batch(m.fetchCmd(includeHistory), tickEvery())
+		cmds := []tea.Cmd{m.fetchNodesCmd(), m.fetchJobsCmd(), tickEvery()}
+		// Periodic sacct refresh - only if user has already opened the
+		// History tab, otherwise it's wasted work.
+		if m.acctLoaded && m.ticks%historyRefreshEvery == 0 && !m.acctInFlight {
+			m.acctInFlight = true
+			cmds = append(cmds, m.fetchAcctCmd())
+		}
+		return m, tea.Batch(cmds...)
+
+	case spinner.TickMsg:
+		var cmd tea.Cmd
+		m.spinner, cmd = m.spinner.Update(msg)
+		return m, cmd
 	}
 
 	return m, nil
+}
+
+// maybeFinishLoading flips m.loading off once both nodes and jobs have landed,
+// and records a sparkline sample.
+func (m *model) maybeFinishLoading() {
+	if m.nodesLoaded && m.jobsLoaded {
+		m.loading = false
+		m.recordSample()
+	}
 }
 
 func (m *model) View() string {
@@ -298,9 +367,14 @@ func (m *model) View() string {
 	}
 
 	var content string
-	if m.showHelp {
+	switch {
+	case m.showHelp:
 		content = m.renderHelp(contentHeight)
-	} else {
+	case !m.nodesLoaded || !m.jobsLoaded:
+		content = m.renderLoading(contentHeight)
+	case m.tab == tabHistory && !m.acctLoaded:
+		content = m.renderLoadingHistory(contentHeight)
+	default:
 		body := m.renderTabBody()
 		m.viewport.Width = m.width
 		m.viewport.Height = contentHeight
@@ -312,6 +386,36 @@ func (m *model) View() string {
 	}
 
 	return lipgloss.JoinVertical(lipgloss.Top, header, summary, content, footer)
+}
+
+func (m *model) renderLoading(maxHeight int) string {
+	what := []string{}
+	if !m.nodesLoaded {
+		what = append(what, "nodes (scontrol)")
+	}
+	if !m.jobsLoaded {
+		what = append(what, "jobs (squeue)")
+	}
+	what = append(what, "")
+	what = append(what, render.ColorFaint("first launch can take a few seconds"))
+
+	body := strings.Join([]string{
+		m.spinner.View() + "  " + lipgloss.NewStyle().Bold(true).Render("loading cluster state…"),
+		"",
+		render.ColorFaint("  • " + strings.Join(what[:len(what)-2], "\n  • ")),
+		"",
+		what[len(what)-1],
+	}, "\n")
+	return lipgloss.Place(m.width, maxHeight, lipgloss.Center, lipgloss.Center, body)
+}
+
+func (m *model) renderLoadingHistory(maxHeight int) string {
+	body := strings.Join([]string{
+		m.spinner.View() + "  " + lipgloss.NewStyle().Bold(true).Render("loading accounting history…"),
+		"",
+		render.ColorFaint("sacct --since 24h is the slowest call; takes 5-15s on a busy cluster"),
+	}, "\n")
+	return lipgloss.Place(m.width, maxHeight, lipgloss.Center, lipgloss.Center, body)
 }
 
 func (m *model) scrollHint() string {
