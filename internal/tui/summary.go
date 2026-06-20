@@ -21,11 +21,27 @@ func (m *model) recordSample() {
 	} else {
 		p = aggregateAll(parts)
 	}
+
+	// Current user's share of the focused partition right now.
+	var myCPU, myGPU, myMem int
+	if u := currentUser(); u != "" {
+		rollups := aggregate.Users(m.jobs, m.partition, u, "cpus", 0, time.Now())
+		if len(rollups) > 0 {
+			r := rollups[0]
+			myCPU = r.CPUsHeld
+			myGPU = r.GPUsHeld
+			myMem = r.MemoryMBHeld
+		}
+	}
+
 	m.history = append(m.history, historySample{
-		when:   time.Now(),
-		cpuPct: pct(p.AllocCPUs, p.TotalCPUs),
-		gpuPct: pct(p.AllocGPUs, p.TotalGPUs),
-		memPct: pct(p.AllocMemMB, p.TotalMemMB),
+		when:     time.Now(),
+		cpuPct:   pct(p.AllocCPUs, p.TotalCPUs),
+		gpuPct:   pct(p.AllocGPUs, p.TotalGPUs),
+		memPct:   pct(p.AllocMemMB, p.TotalMemMB),
+		myCPUPct: pct(myCPU, p.TotalCPUs),
+		myGPUPct: pct(myGPU, p.TotalGPUs),
+		myMemPct: pct(myMem, p.TotalMemMB),
 	})
 	if len(m.history) > maxHistory {
 		m.history = m.history[len(m.history)-maxHistory:]
@@ -196,10 +212,16 @@ func (m *model) renderUserCard() string {
 		oldest = render.HumanDuration(r.OldestRunAge)
 	}
 
+	const userSparkW = 16
+	cpuSpark := render.Sparkline(m.sparkSeries(func(s historySample) int { return s.myCPUPct }), userSparkW)
+	gpuSpark := render.Sparkline(m.sparkSeries(func(s historySample) int { return s.myGPUPct }), userSparkW)
+	memSpark := render.Sparkline(m.sparkSeries(func(s historySample) int { return s.myMemPct }), userSparkW)
+
 	lines := []string{
 		cardTitleStyle.Render("You: "+username) + cardCountStyle.Render(fmt.Sprintf("  %d job%s", totalJobs, plural(totalJobs))),
 		fmt.Sprintf("%s  %s", padRight("State", 7), state),
-		fmt.Sprintf("%s  %d CPU   %d GPU   %s mem", padRight("Holding", 7), r.CPUsHeld, r.GPUsHeld, render.HumanMB(r.MemoryMBHeld)),
+		fmt.Sprintf("%s  %d CPU %s   %d GPU %s   %s mem %s",
+			padRight("Holding", 7), r.CPUsHeld, cpuSpark, r.GPUsHeld, gpuSpark, render.HumanMB(r.MemoryMBHeld), memSpark),
 		fmt.Sprintf("%s  %s", padRight("Oldest", 7), oldest),
 	}
 	return cardStyle.Render(strings.Join(lines, "\n"))

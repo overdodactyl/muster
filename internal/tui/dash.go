@@ -215,10 +215,12 @@ func (m *model) cycleSort() {
 }
 
 // historySample is a per-tick snapshot of the focused partition's
-// utilization, recorded to feed the sparklines.
+// utilization plus the current user's share of it. Both feed sparklines
+// in the partition card and the user card respectively.
 type historySample struct {
-	when                   time.Time
-	cpuPct, gpuPct, memPct int
+	when                         time.Time
+	cpuPct, gpuPct, memPct       int // partition: alloc share of total
+	myCPUPct, myGPUPct, myMemPct int // current user's share of partition total
 }
 
 const maxHistory = 60 // 60 ticks × 10s = 10 min of trend data
