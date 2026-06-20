@@ -1038,17 +1038,16 @@ func highlightDataRow(body string, rowIdx int) string {
 	dataIdx := -1
 	for i, line := range lines {
 		if !strings.Contains(line, "│") {
-			// border line — just shift right by one space for alignment
-			lines[i] = " " + line
+			lines[i] = " " + line // border line
 			continue
 		}
 		if dataIdx == -1 {
-			lines[i] = " " + line // header line
+			lines[i] = " " + line // header
 			dataIdx = 0
 			continue
 		}
 		if dataIdx == rowIdx {
-			lines[i] = cursorRowStyle.Render(cursorMarker + line)
+			lines[i] = tintRow(cursorMarker + line)
 		} else {
 			lines[i] = " " + line
 		}
@@ -1057,14 +1056,21 @@ func highlightDataRow(body string, rowIdx int) string {
 	return strings.Join(lines, "\n")
 }
 
-var (
-	cursorRowStyle = lipgloss.NewStyle().
-			Background(lipgloss.Color("238"))
-	cursorMarker = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("14")).
-			Bold(true).
-			Render("▶")
-)
+// tintRow wraps a line in a soft background color and re-applies the bg after
+// every internal `\x1b[0m` reset — go-pretty emits resets around each colored
+// cell, and a naive outer bg would drop on the first reset and never come
+// back, leaving the background visible only on the leftmost piece of the row.
+func tintRow(line string) string {
+	const bgOn = "\x1b[48;5;238m"
+	const bgOff = "\x1b[0m"
+	const reset = "\x1b[0m"
+	// Replace every internal reset with reset + re-application of bg.
+	patched := strings.ReplaceAll(line, reset, reset+bgOn)
+	return bgOn + patched + bgOff
+}
+
+// cursorMarker is the leftmost indicator on the selected row: a bold cyan ▶.
+var cursorMarker = "\x1b[1;36m▶\x1b[0m"
 
 func orDefault(s, def string) string {
 	if s == "" {
