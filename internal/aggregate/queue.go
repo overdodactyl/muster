@@ -28,6 +28,10 @@ type QueueRow struct {
 
 	// IsNew is set by the TUI when this job appeared since the last refresh.
 	IsNew bool `json:"is_new,omitempty"`
+
+	// IsSelected is set by the TUI when the user has marked this row for
+	// bulk operations.
+	IsSelected bool `json:"is_selected,omitempty"`
 }
 
 // Queue returns pending jobs (and running too if includeRunning). reasonFilter

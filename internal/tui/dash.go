@@ -142,6 +142,7 @@ type model struct {
 	confirmCancelName  string
 	confirmCancelOwner string
 	confirmMode        bool
+	bulkCancelIDs      []int64 // non-empty when confirm is a multi-select cancel
 
 	cancelFlash    string
 	cancelFlashErr bool
@@ -153,6 +154,10 @@ type model struct {
 	// job stays "new" only until the next refresh fires.
 	lastSeenJobs map[int64]bool
 	jobIsNew     map[int64]bool
+
+	// Space-toggled job selection set (shared across Jobs and Queue tabs
+	// since both navigate job IDs). Cleared after a bulk operation.
+	selectedJobs map[int64]bool
 
 	loading   bool
 	lastErr   error
@@ -376,11 +381,18 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "ctrl+c":
 				return m, tea.Quit
 			case "y", "Y":
-				id := m.confirmCancelID
 				m.confirmMode = false
+				if len(m.bulkCancelIDs) > 0 {
+					ids := m.bulkCancelIDs
+					m.bulkCancelIDs = nil
+					m.selectedJobs = nil
+					return m, m.cancelManyCmd(ids)
+				}
+				id := m.confirmCancelID
 				return m, m.cancelJobCmd(id)
 			default:
 				m.confirmMode = false
+				m.bulkCancelIDs = nil
 				return m, nil
 			}
 		}
@@ -418,6 +430,9 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "enter":
 			return m, m.openDetail()
+		case " ":
+			m.toggleSelection()
+			return m, nil
 		case "c":
 			m.maybeOpenConfirmCancel()
 			return m, nil
@@ -555,6 +570,17 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// Immediately refresh jobs so the table updates.
 		return m, m.fetchJobsCmd()
+
+	case bulkCancelResultMsg:
+		if msg.firstErr != nil && msg.succeeded < msg.requested {
+			m.cancelFlash = fmt.Sprintf("cancelled %d of %d (first error: %s)",
+				msg.succeeded, msg.requested, msg.firstErr.Error())
+			m.cancelFlashErr = true
+		} else {
+			m.cancelFlash = fmt.Sprintf("cancelled %d job%s", msg.succeeded, plural(msg.succeeded))
+			m.cancelFlashErr = false
+		}
+		return m, m.fetchJobsCmd()
 	}
 
 	return m, nil
@@ -622,10 +648,71 @@ func (m *model) cancelJobCmd(id int64) tea.Cmd {
 	}
 }
 
-// maybeOpenConfirmCancel checks if the cursor is on a cancellable job row
-// (Jobs or Queue tab) AND that the job belongs to the current user. If both
-// are true, it opens a y/N confirmation modal.
+// cancelManyCmd cancels a set of jobs sequentially and reports the aggregate
+// result. Sequential keeps error messages clean (vs. a single batched call).
+func (m *model) cancelManyCmd(ids []int64) tea.Cmd {
+	c := m.client
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		var firstErr error
+		ok := 0
+		for _, id := range ids {
+			if err := c.Cancel(ctx, id); err != nil {
+				if firstErr == nil {
+					firstErr = err
+				}
+				continue
+			}
+			ok++
+		}
+		return bulkCancelResultMsg{requested: len(ids), succeeded: ok, firstErr: firstErr}
+	}
+}
+
+type bulkCancelResultMsg struct {
+	requested int
+	succeeded int
+	firstErr  error
+}
+
+// toggleSelection adds/removes the cursor row's job ID from the bulk-select
+// set (Jobs/Queue tabs only).
+func (m *model) toggleSelection() {
+	cur := m.cursor[m.tab]
+	var id int64
+	switch m.tab {
+	case tabJobs:
+		if cur >= 0 && cur < len(m.lastJobs) {
+			id = m.lastJobs[cur].JobID
+		}
+	case tabQueue:
+		if cur >= 0 && cur < len(m.lastQueue) {
+			id = m.lastQueue[cur].JobID
+		}
+	default:
+		return
+	}
+	if id == 0 {
+		return
+	}
+	if m.selectedJobs == nil {
+		m.selectedJobs = map[int64]bool{}
+	}
+	if m.selectedJobs[id] {
+		delete(m.selectedJobs, id)
+	} else {
+		m.selectedJobs[id] = true
+	}
+}
+
+// maybeOpenConfirmCancel decides between single-row and bulk-selection cancel
+// flows based on whether the user has marked jobs with Space.
 func (m *model) maybeOpenConfirmCancel() {
+	if len(m.selectedJobs) > 0 {
+		m.openConfirmBulkCancel()
+		return
+	}
 	cur := m.cursor[m.tab]
 	var id int64
 	var user string
@@ -657,6 +744,40 @@ func (m *model) maybeOpenConfirmCancel() {
 	m.confirmCancelID = id
 	m.confirmCancelOwner = user
 	m.confirmCancelName = name
+	m.confirmMode = true
+}
+
+// openConfirmBulkCancel opens the confirm modal in bulk mode. Resolves owners
+// from the most recent rendered slices so we can refuse other-user IDs cleanly.
+func (m *model) openConfirmBulkCancel() {
+	me := currentUser()
+	jobInfo := map[int64]struct{ owner, name string }{}
+	for _, j := range m.lastJobs {
+		jobInfo[j.JobID] = struct{ owner, name string }{j.User, j.Name}
+	}
+	for _, q := range m.lastQueue {
+		jobInfo[q.JobID] = struct{ owner, name string }{q.User, q.Name}
+	}
+
+	var refused []int64
+	var ok []int64
+	for id := range m.selectedJobs {
+		info, found := jobInfo[id]
+		if !found || info.owner != me {
+			refused = append(refused, id)
+			continue
+		}
+		ok = append(ok, id)
+	}
+	if len(refused) > 0 {
+		m.cancelFlash = fmt.Sprintf("refused: %d selected job(s) not owned by %s", len(refused), me)
+		m.cancelFlashErr = true
+	}
+	if len(ok) == 0 {
+		m.selectedJobs = nil
+		return
+	}
+	m.bulkCancelIDs = ok
 	m.confirmMode = true
 }
 
@@ -813,14 +934,36 @@ func (m *model) resizeViewport() {
 }
 
 func (m *model) renderConfirmCancel(maxHeight int) string {
-	body := strings.Join([]string{
-		helpTitleStyle.Render(fmt.Sprintf("Cancel job %d?", m.confirmCancelID)),
+	var lines []string
+	if len(m.bulkCancelIDs) > 0 {
+		lines = append(lines, helpTitleStyle.Render(fmt.Sprintf("Cancel %d selected job%s?", len(m.bulkCancelIDs), plural(len(m.bulkCancelIDs)))))
+		lines = append(lines, "")
+		// Show up to 8 ids inline.
+		shown := m.bulkCancelIDs
+		more := 0
+		if len(shown) > 8 {
+			more = len(shown) - 8
+			shown = shown[:8]
+		}
+		for _, id := range shown {
+			lines = append(lines, fmt.Sprintf("  • %d", id))
+		}
+		if more > 0 {
+			lines = append(lines, render.ColorFaint(fmt.Sprintf("  + %d more", more)))
+		}
+	} else {
+		lines = append(lines,
+			helpTitleStyle.Render(fmt.Sprintf("Cancel job %d?", m.confirmCancelID)),
+			"",
+			fmt.Sprintf("  %s  %s", render.ColorFaint("user:"), m.confirmCancelOwner),
+			fmt.Sprintf("  %s  %s", render.ColorFaint("name:"), m.confirmCancelName),
+		)
+	}
+	lines = append(lines,
 		"",
-		fmt.Sprintf("  %s  %s", render.ColorFaint("user:"), m.confirmCancelOwner),
-		fmt.Sprintf("  %s  %s", render.ColorFaint("name:"), m.confirmCancelName),
-		"",
-		"  " + render.ColorYellow("y") + " confirm cancel    " + render.ColorYellow("n / esc") + " abort",
-	}, "\n")
+		"  "+render.ColorYellow("y")+" confirm cancel    "+render.ColorYellow("n / esc")+" abort",
+	)
+	body := strings.Join(lines, "\n")
 	style := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("196")).
@@ -1215,7 +1358,8 @@ func (m *model) renderHelp(maxHeight int) string {
 		"  " + helpKeyStyle.Render("/") + "           filter rows (name/user/reason)",
 		"  " + helpKeyStyle.Render("m") + "           toggle Me mode (your jobs only)",
 		"  " + helpKeyStyle.Render("enter") + "       open detail for the selected row",
-		"  " + helpKeyStyle.Render("c") + "           cancel selected job (own jobs only)",
+		"  " + helpKeyStyle.Render("space") + "       toggle row selection (jobs/queue)",
+		"  " + helpKeyStyle.Render("c") + "           cancel cursor row OR all selected (own only)",
 		"  " + helpKeyStyle.Render("↑ / ↓ / k / j") + "  move selection cursor",
 		"  " + helpKeyStyle.Render("g / G") + "       jump to first / last row",
 		"  " + helpKeyStyle.Render("pgup / pgdn") + " scroll one page",
@@ -1346,6 +1490,9 @@ func (m *model) renderTabBody() string {
 			if m.jobIsNew[rows[i].JobID] {
 				rows[i].IsNew = true
 			}
+			if m.selectedJobs[rows[i].JobID] {
+				rows[i].IsSelected = true
+			}
 		}
 		m.lastJobs = rows
 		rowCount = len(rows)
@@ -1381,6 +1528,9 @@ func (m *model) renderTabBody() string {
 		for i := range filtered {
 			if m.jobIsNew[filtered[i].JobID] {
 				filtered[i].IsNew = true
+			}
+			if m.selectedJobs[filtered[i].JobID] {
+				filtered[i].IsSelected = true
 			}
 		}
 		m.lastQueue = filtered
@@ -1481,9 +1631,12 @@ func (m *model) renderFooter() string {
 	} else if !m.lastFetch.IsZero() {
 		status = fmt.Sprintf("last update %s", m.lastFetch.Format("15:04:05"))
 	}
-	help := "? help · q quit · r refresh · tab · s sort · / filter · m me · c cancel"
+	help := "? help · q quit · r refresh · tab · s sort · / filter · m me · space select · c cancel"
 	if m.meMode {
 		help += "  ·  " + render.ColorYellow("Me mode")
+	}
+	if len(m.selectedJobs) > 0 {
+		help += "  ·  " + render.ColorCyan(fmt.Sprintf("%d selected", len(m.selectedJobs)))
 	}
 	if m.filter != "" {
 		help += "  ·  " + render.ColorYellow("filter: "+m.filter)

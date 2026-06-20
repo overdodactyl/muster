@@ -25,6 +25,10 @@ type JobRow struct {
 	// IsNew is set by the TUI (not aggregate) when this job appeared since
 	// the previous refresh — used to flash a green marker on the row.
 	IsNew bool `json:"is_new,omitempty"`
+
+	// IsSelected is set by the TUI when the user has marked this row with
+	// Space for bulk operations (e.g., cancel-many).
+	IsSelected bool `json:"is_selected,omitempty"`
 }
 
 // Jobs returns running jobs (and pending if includePending) sorted by

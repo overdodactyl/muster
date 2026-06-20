@@ -345,7 +345,7 @@ func RenderJobs(w io.Writer, rows []aggregate.JobRow) {
 			nodes = ColorFaint("-")
 		}
 		t.AppendRow(table.Row{
-			formatNewMarker(r.IsNew) + fmt.Sprintf("%d", r.JobID),
+			formatRowMarker(r.IsSelected, r.IsNew) + fmt.Sprintf("%d", r.JobID),
 			ColorCyan(r.User),
 			truncate(r.Name, 28),
 			r.Partition,
@@ -367,6 +367,23 @@ func formatNewMarker(isNew bool) string {
 		return ColorGreen("● ")
 	}
 	return "  "
+}
+
+// formatRowMarker combines selection and new-arrival indicators into a
+// 2-char prefix kept consistent across rows for alignment.
+//
+//	✓        selected (priority)
+//	●        new since last refresh
+//	  (sp)   neither
+func formatRowMarker(isSelected, isNew bool) string {
+	switch {
+	case isSelected:
+		return ColorCyan("✓ ")
+	case isNew:
+		return ColorGreen("● ")
+	default:
+		return "  "
+	}
 }
 
 // formatRuntimeCell renders the TIME column. For running jobs with a finite
@@ -415,7 +432,7 @@ func RenderQueue(w io.Writer, rows []aggregate.QueueRow) {
 			reason = ColorYellow(reason)
 		}
 		t.AppendRow(table.Row{
-			formatNewMarker(r.IsNew) + fmt.Sprintf("%d", r.JobID),
+			formatRowMarker(r.IsSelected, r.IsNew) + fmt.Sprintf("%d", r.JobID),
 			ColorCyan(r.User),
 			truncate(r.Name, 24),
 			r.CPUs,
