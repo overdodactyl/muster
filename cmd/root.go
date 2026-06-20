@@ -5,6 +5,9 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
+
+	"muster/internal/render"
 )
 
 var (
@@ -26,6 +29,14 @@ insight with reason codes explained, and recent sacct history.`,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		if flagNoColor || flagJSON {
 			color.NoColor = true
+		}
+		// Cap table width to the terminal so narrow shells don't break the
+		// layout. Skip when output isn't a TTY (piping); go-pretty's default
+		// is fine there.
+		if fd := int(os.Stdout.Fd()); term.IsTerminal(fd) {
+			if w, _, err := term.GetSize(fd); err == nil && w > 0 {
+				render.SetMaxWidth(w)
+			}
 		}
 	},
 }

@@ -9,6 +9,7 @@ require (
 	github.com/fatih/color v1.18.0
 	github.com/jedib0t/go-pretty/v6 v6.8.1
 	github.com/spf13/cobra v1.9.1
+	golang.org/x/term v0.29.0
 )
 
 require (

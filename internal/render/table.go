@@ -17,6 +17,15 @@ import (
 // newTable returns a go-pretty table writer with the project-wide style:
 // rounded unicode borders, left-aligned cells, no auto-wrap, bold-cyan
 // headers, and zebra-striped rows for scannability.
+// maxWidth caps the rendered table width when set (>0). Configured by the
+// dash to match the viewport width and by static CLI commands via tty
+// detection — go-pretty wraps cells to fit rather than overflowing into the
+// scrollback.
+var maxWidth int
+
+// SetMaxWidth sets the soft cap on table width. 0 disables (default behavior).
+func SetMaxWidth(n int) { maxWidth = n }
+
 func newTable(w io.Writer, headers []string) table.Writer {
 	t := table.NewWriter()
 	t.SetOutputMirror(w)
@@ -35,6 +44,9 @@ func newTable(w io.Writer, headers []string) table.Writer {
 		style.Color.Separator = text.Colors{text.Faint}
 	}
 	t.SetStyle(style)
+	if maxWidth > 0 {
+		t.SetAllowedRowLength(maxWidth)
+	}
 
 	return t
 }

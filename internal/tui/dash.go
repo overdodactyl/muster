@@ -293,6 +293,9 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		m.resizeViewport()
+		// Tell the render layer about the new width so go-pretty wraps cells
+		// to fit instead of overflowing into the scrollback.
+		render.SetMaxWidth(msg.Width)
 		return m, nil
 
 	case tea.KeyMsg:
