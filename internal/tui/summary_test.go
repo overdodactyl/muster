@@ -43,5 +43,12 @@ func TestRenderSummary_Live(t *testing.T) {
 		width:     120,
 		height:    40,
 	}
+	// Seed the history with a synthetic curve so the sparkline renders
+	// something interesting instead of a single bar.
+	curve := []int{12, 18, 25, 33, 41, 47, 55, 62, 60, 58, 52, 45, 40, 38, 42, 50, 60, 67, 70, 72, 68, 62, 55}
+	for _, v := range curve {
+		m.history = append(m.history, historySample{cpuPct: v, gpuPct: v * 80 / 100, memPct: v + 20})
+	}
+	m.recordSample() // append one real sample too
 	fmt.Println(m.renderSummary(120))
 }

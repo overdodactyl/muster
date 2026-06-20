@@ -60,10 +60,21 @@ type model struct {
 	jobs  []slurm.Job
 	acct  []slurm.AcctJob
 
+	history []historySample
+
 	loading   bool
 	lastErr   error
 	lastFetch time.Time
 }
+
+// historySample is a per-tick snapshot of the focused partition's
+// utilization, recorded to feed the sparklines.
+type historySample struct {
+	when                   time.Time
+	cpuPct, gpuPct, memPct int
+}
+
+const maxHistory = 60 // 60 ticks × 10s = 10 min of trend data
 
 type dataMsg struct {
 	nodes      []slurm.Node
@@ -161,6 +172,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.lastErr = msg.err
 		m.lastFetch = msg.when
 		m.loading = false
+		m.recordSample()
 
 	case tickMsg:
 		m.ticks++

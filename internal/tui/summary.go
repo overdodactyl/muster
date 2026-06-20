@@ -13,6 +13,33 @@ import (
 	"muster/internal/render"
 )
 
+func (m *model) recordSample() {
+	parts := aggregate.Partitions(m.nodes, m.jobs, m.partition)
+	var p aggregate.PartitionSummary
+	if m.partition != "" && len(parts) > 0 {
+		p = parts[0]
+	} else {
+		p = aggregateAll(parts)
+	}
+	m.history = append(m.history, historySample{
+		when:   time.Now(),
+		cpuPct: pct(p.AllocCPUs, p.TotalCPUs),
+		gpuPct: pct(p.AllocGPUs, p.TotalGPUs),
+		memPct: pct(p.AllocMemMB, p.TotalMemMB),
+	})
+	if len(m.history) > maxHistory {
+		m.history = m.history[len(m.history)-maxHistory:]
+	}
+}
+
+func (m *model) sparkSeries(get func(historySample) int) []int {
+	out := make([]int, len(m.history))
+	for i, s := range m.history {
+		out[i] = get(s)
+	}
+	return out
+}
+
 // currentUser returns the username for the "You" card. Prefers $USER for speed.
 func currentUser() string {
 	if u := os.Getenv("USER"); u != "" {
@@ -61,13 +88,32 @@ func (m *model) renderPartCard(label string, p aggregate.PartitionSummary) strin
 		gpuLabel = fmt.Sprintf("%d/%d%s", p.AllocGPUs, p.TotalGPUs, model)
 	}
 
+	cpuSpark := render.Sparkline(m.sparkSeries(func(s historySample) int { return s.cpuPct }), sparkWidth)
+	gpuSpark := render.Sparkline(m.sparkSeries(func(s historySample) int { return s.gpuPct }), sparkWidth)
+	memSpark := render.Sparkline(m.sparkSeries(func(s historySample) int { return s.memPct }), sparkWidth)
+
 	lines := []string{
 		cardTitleStyle.Render(label) + cardCountStyle.Render(fmt.Sprintf("  %d nodes  •  %d running / %d pending", p.TotalNodes, p.RunningJobs, p.PendingJobs)),
-		fmt.Sprintf("%s  %s  %s", padRight("CPUs", 5), padRight(fmt.Sprintf("%d/%d", p.AllocCPUs, p.TotalCPUs), 12), render.Bar(p.AllocCPUs, p.TotalCPUs, 14)+render.ColorFaint(fmt.Sprintf(" %3d%%", cpuPct))),
-		fmt.Sprintf("%s  %s  %s", padRight("GPUs", 5), padRight(gpuLabel, 12), render.Bar(p.AllocGPUs, p.TotalGPUs, 14)+render.ColorFaint(fmt.Sprintf(" %3d%%", gpuPct))),
-		fmt.Sprintf("%s  %s  %s", padRight("Mem", 5), padRight(fmt.Sprintf("%s/%s", render.HumanMB(p.AllocMemMB), render.HumanMB(p.TotalMemMB)), 12), render.Bar(p.AllocMemMB, p.TotalMemMB, 14)+render.ColorFaint(fmt.Sprintf(" %3d%%", memPct))),
+		formatMetricLine("CPUs", fmt.Sprintf("%d/%d", p.AllocCPUs, p.TotalCPUs), p.AllocCPUs, p.TotalCPUs, cpuPct, cpuSpark),
+		formatMetricLine("GPUs", gpuLabel, p.AllocGPUs, p.TotalGPUs, gpuPct, gpuSpark),
+		formatMetricLine("Mem", fmt.Sprintf("%s/%s", render.HumanMB(p.AllocMemMB), render.HumanMB(p.TotalMemMB)), p.AllocMemMB, p.TotalMemMB, memPct, memSpark),
 	}
 	return cardStyle.Render(strings.Join(lines, "\n"))
+}
+
+const sparkWidth = 30
+
+// formatMetricLine builds one row of the partition card:
+//
+//	CPUs   168/352      ████▊░░░░░░░░░  47%   ▁▂▃▄▅▆▇█▇▆▅▄▃▂
+func formatMetricLine(label, count string, used, total, pct int, spark string) string {
+	return fmt.Sprintf("%s  %s  %s%s  %s",
+		padRight(label, 5),
+		padRight(count, 12),
+		render.Bar(used, total, 14),
+		render.ColorFaint(fmt.Sprintf(" %3d%%", pct)),
+		spark,
+	)
 }
 
 func (m *model) renderUserCard() string {
