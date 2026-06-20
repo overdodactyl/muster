@@ -93,7 +93,9 @@ Use --partitions to restrict to a subset (comma-separated).`,
 }
 
 func init() {
-	exporterCmd.Flags().StringVar(&exporterListen, "listen", ":9100", "HTTP listen address")
+	// 9836 is unallocated in the Prometheus exporter port directory; 9100 is
+	// node_exporter and conflicts on most hosts, so we avoid that by default.
+	exporterCmd.Flags().StringVar(&exporterListen, "listen", ":9836", "HTTP listen address (avoid 9100 — that's node_exporter)")
 	exporterCmd.Flags().DurationVar(&exporterRefresh, "refresh", 15*time.Second, "minimum interval between Slurm fetches (cache window)")
 	exporterCmd.Flags().StringVar(&exporterPartitions, "partitions", "", "restrict metrics to these partitions (comma-separated, default = all)")
 	rootCmd.AddCommand(exporterCmd)
