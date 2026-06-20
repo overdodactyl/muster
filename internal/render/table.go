@@ -195,6 +195,41 @@ func RenderQueue(w io.Writer, rows []aggregate.QueueRow) {
 	t.Render()
 }
 
+func RenderHistory(w io.Writer, rows []aggregate.HistoryRow, keyHeader string) {
+	if w == nil {
+		w = os.Stdout
+	}
+	if len(rows) == 0 {
+		fmt.Fprintln(w, "no completed jobs in this window")
+		return
+	}
+	if keyHeader == "" {
+		keyHeader = "KEY"
+	}
+	t := newTable(w, []string{strings.ToUpper(keyHeader), "JOBS", "DONE", "FAIL", "TO", "CANC", "CPU-HOURS", "GPU-HOURS"})
+	for _, r := range rows {
+		fail := fmt.Sprintf("%d", r.Failed)
+		if r.Failed > 0 {
+			fail = ColorYellow(fail)
+		}
+		to := fmt.Sprintf("%d", r.Timeout)
+		if r.Timeout > 0 {
+			to = ColorRed(to)
+		}
+		t.Append([]string{
+			ColorCyan(r.Key),
+			fmt.Sprintf("%d", r.Jobs),
+			fmt.Sprintf("%d", r.Completed),
+			fail,
+			to,
+			fmt.Sprintf("%d", r.Cancelled),
+			fmt.Sprintf("%.1f", r.CPUHours),
+			fmt.Sprintf("%.1f", r.GPUHours),
+		})
+	}
+	t.Render()
+}
+
 // JoinList truncates a string slice for fixed-width display.
 func JoinList(items []string, max int) string {
 	if len(items) == 0 {
