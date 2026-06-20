@@ -112,12 +112,15 @@ type model struct {
 	lastQueue      []aggregate.QueueRow
 	lastHistory    []aggregate.HistoryRow
 
-	detailOpen   bool
-	detailTitle  string
-	detailBody   string
-	detailJobID  int64    // non-zero when the detail is a job/queue row
-	detailLogs   []string // captured stdout tail, refreshed each tick while open
-	detailLogErr error
+	detailOpen     bool
+	detailTitle    string
+	detailBody     string
+	detailJobID    int64    // non-zero when the detail is a job/queue row
+	detailLogPath  string   // resolved stdout path (for header display)
+	detailLogs     []string // captured stdout lines, refreshed each tick while open
+	detailLogErr   error
+	detailViewport viewport.Model // scrollable log viewer (jobs/queue only)
+	detailVPReady  bool
 
 	confirmCancelID    int64
 	confirmCancelName  string
@@ -284,12 +287,25 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.showHelp = false
 			return m, nil
 		}
-		// Detail overlay swallows any key (most dismiss).
+		// Detail overlay key handling:
+		//   esc / q       close
+		//   ctrl+c        quit the app
+		//   When the detail is a job (jobID > 0): scroll keys route to the
+		//   embedded log viewport instead of dismissing.
 		if m.detailOpen {
 			switch msg.String() {
-			case "q", "ctrl+c":
+			case "esc", "q":
+				m.detailOpen = false
+				return m, nil
+			case "ctrl+c":
 				return m, tea.Quit
 			}
+			if m.detailJobID > 0 {
+				var cmd tea.Cmd
+				m.detailViewport, cmd = m.detailViewport.Update(msg)
+				return m, cmd
+			}
+			// Non-job overlays still dismiss on any other key.
 			m.detailOpen = false
 			return m, nil
 		}
@@ -425,13 +441,17 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.MouseMsg:
 		// Handle wheel directly: bubbles/viewport's internal handler only
 		// fires on Action==Press, but some terminals send wheel events with
-		// other actions (Motion, etc.). Routing wheel through ScrollUp/Down
-		// ourselves bypasses that restriction.
+		// other actions (Motion, etc.). When a job detail overlay is open,
+		// the wheel scrolls the log viewport instead of the main table.
+		target := &m.viewport
+		if m.detailOpen && m.detailJobID > 0 {
+			target = &m.detailViewport
+		}
 		switch msg.Button {
 		case tea.MouseButtonWheelUp:
-			m.viewport.LineUp(3)
+			target.LineUp(3)
 		case tea.MouseButtonWheelDown:
-			m.viewport.LineDown(3)
+			target.LineDown(3)
 		}
 		return m, nil
 
@@ -439,6 +459,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.jobID == m.detailJobID && m.detailOpen {
 			m.detailLogs = msg.lines
 			m.detailLogErr = msg.err
+			m.detailLogPath = msg.path
+			m.updateDetailViewportContent()
 		}
 		return m, nil
 
@@ -464,18 +486,22 @@ type cancelResultMsg struct {
 
 type logTailMsg struct {
 	jobID int64
+	path  string
 	lines []string
 	err   error
 }
 
-const detailLogTailLines = 18
+// detailLogMaxLines caps how many trailing lines we hold for the in-overlay
+// log viewer. Big enough to scroll meaningfully, small enough that NFS reads
+// of huge .out files stay snappy. For complete files, `muster logs <id> -n 0`.
+const detailLogMaxLines = 2000
 
 // fetchLogTailCmd reads the last N lines of a job's stdout via scontrol +
 // `tail -n N <path>`. Results land as logTailMsg in the Update loop.
 func (m *model) fetchLogTailCmd(jobID int64) tea.Cmd {
 	c := m.client
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 		d, err := c.JobDetail(ctx, jobID)
 		if err != nil {
@@ -485,12 +511,12 @@ func (m *model) fetchLogTailCmd(jobID int64) tea.Cmd {
 		if path == "" {
 			return logTailMsg{jobID: jobID, err: fmt.Errorf("interactive session — no stdout file")}
 		}
-		out, err := exec.CommandContext(ctx, "tail", "-n", fmt.Sprintf("%d", detailLogTailLines), path).Output()
+		out, err := exec.CommandContext(ctx, "tail", "-n", fmt.Sprintf("%d", detailLogMaxLines), path).Output()
 		if err != nil {
-			return logTailMsg{jobID: jobID, err: err}
+			return logTailMsg{jobID: jobID, path: path, err: err}
 		}
 		lines := strings.Split(strings.TrimRight(string(out), "\n"), "\n")
-		return logTailMsg{jobID: jobID, lines: lines}
+		return logTailMsg{jobID: jobID, path: path, lines: lines}
 	}
 }
 
@@ -711,30 +737,79 @@ func (m *model) renderConfirmCancel(maxHeight int) string {
 }
 
 func (m *model) renderDetailOverlay(maxHeight int) string {
-	parts := []string{
+	// Job/queue detail: full-screen layout with a scrollable log viewer
+	// below the metadata. Other entity types use the small centered card.
+	if m.detailJobID == 0 {
+		body := strings.Join([]string{
+			helpTitleStyle.Render(m.detailTitle),
+			"",
+			m.detailBody,
+			"",
+			render.ColorFaint("press any key to return"),
+		}, "\n")
+		return lipgloss.Place(m.width, maxHeight, lipgloss.Center, lipgloss.Center, helpCardStyle.Render(body))
+	}
+
+	header := strings.Join([]string{
 		helpTitleStyle.Render(m.detailTitle),
-		"",
 		m.detailBody,
+	}, "\n")
+
+	logHeader := helpSectionStyle.Render("stdout")
+	if m.detailLogPath != "" {
+		logHeader += "  " + render.ColorFaint(m.detailLogPath)
 	}
-	if m.detailJobID > 0 {
-		parts = append(parts, "", helpSectionStyle.Render("stdout tail"))
-		switch {
-		case m.detailLogErr != nil:
-			parts = append(parts, render.ColorFaint("  ("+m.detailLogErr.Error()+")"))
-		case m.detailLogs == nil:
-			parts = append(parts, render.ColorFaint("  loading…"))
-		case len(m.detailLogs) == 0 || (len(m.detailLogs) == 1 && m.detailLogs[0] == ""):
-			parts = append(parts, render.ColorFaint("  (empty)"))
-		default:
-			for _, ln := range m.detailLogs {
-				parts = append(parts, "  "+ln)
-			}
-		}
+
+	hint := render.ColorFaint("↑/↓/k/j scroll · pgup/pgdn page · g/G top/end · esc close")
+
+	headerH := lipgloss.Height(header) + lipgloss.Height(logHeader) + lipgloss.Height(hint) + 2 // 2 blank lines
+	vpHeight := maxHeight - headerH
+	if vpHeight < 4 {
+		vpHeight = 4
 	}
-	parts = append(parts, "", render.ColorFaint("press any key to return"))
-	body := strings.Join(parts, "\n")
-	card := helpCardStyle.Render(body)
-	return lipgloss.Place(m.width, maxHeight, lipgloss.Center, lipgloss.Center, card)
+	if !m.detailVPReady || m.detailViewport.Width != m.width || m.detailViewport.Height != vpHeight {
+		m.detailViewport = viewport.New(m.width, vpHeight)
+		m.detailVPReady = true
+		m.updateDetailViewportContent()
+	} else {
+		m.detailViewport.Width = m.width
+		m.detailViewport.Height = vpHeight
+	}
+
+	return strings.Join([]string{
+		header,
+		"",
+		logHeader,
+		m.detailViewport.View(),
+		hint,
+	}, "\n")
+}
+
+// updateDetailViewportContent rebuilds the viewport's content from
+// m.detailLogs and (lipgloss-)wraps long lines to fit the current width so
+// nothing gets cut off when squeue prints a multi-K-character line.
+func (m *model) updateDetailViewportContent() {
+	if !m.detailVPReady {
+		return
+	}
+	wrapWidth := m.detailViewport.Width
+	if wrapWidth < 20 {
+		wrapWidth = 20
+	}
+	switch {
+	case m.detailLogErr != nil:
+		m.detailViewport.SetContent(render.ColorFaint("(" + m.detailLogErr.Error() + ")"))
+	case m.detailLogs == nil:
+		m.detailViewport.SetContent(render.ColorFaint("loading…"))
+	case len(m.detailLogs) == 0 || (len(m.detailLogs) == 1 && m.detailLogs[0] == ""):
+		m.detailViewport.SetContent(render.ColorFaint("(empty)"))
+	default:
+		wrap := lipgloss.NewStyle().Width(wrapWidth)
+		body := wrap.Render(strings.Join(m.detailLogs, "\n"))
+		// Anchor view at the bottom so newest lines land in view, like tail -f.
+		m.detailViewport.SetContent(body)
+		m.detailViewport.GotoBottom()
+	}
 }
 
 // openDetail prepares the detail overlay for the current cursor row and
