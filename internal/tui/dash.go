@@ -139,6 +139,9 @@ type model struct {
 	// effMsg lands. Powers the live sparkline in the metadata block.
 	detailEffSeries []int
 
+	// History-of-job-name comparison for the open detail.
+	detailHistoryRuns []slurm.AcctJob
+
 	// In-log search (active only while the log viewer is open).
 	logSearch       string
 	logSearchMode   bool
@@ -593,6 +596,12 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case jobHistoryMsg:
+		if msg.jobID == m.detailJobID && m.detailOpen && msg.err == nil {
+			m.detailHistoryRuns = msg.runs
+		}
+		return m, nil
+
 	case cancelResultMsg:
 		if msg.err != nil {
 			m.cancelFlash = fmt.Sprintf("failed to cancel job %d: %s", msg.id, msg.err.Error())
@@ -642,6 +651,25 @@ type effMsg struct {
 type clusterMsg struct {
 	name string
 	err  error
+}
+
+type jobHistoryMsg struct {
+	jobID int64
+	runs  []slurm.AcctJob
+	err   error
+}
+
+func (m *model) fetchJobHistoryCmd(jobID int64, jobName, partition string) tea.Cmd {
+	c := m.client
+	return func() tea.Msg {
+		if jobName == "" {
+			return jobHistoryMsg{jobID: jobID}
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		runs, err := c.JobsByName(ctx, jobName, partition, 30*24*time.Hour)
+		return jobHistoryMsg{jobID: jobID, runs: runs, err: err}
+	}
 }
 
 func (m *model) fetchClusterCmd() tea.Cmd {
@@ -1056,6 +1084,9 @@ func (m *model) renderDetailOverlay(maxHeight int) string {
 	if effLine := m.formatEfficiencyLine(); effLine != "" {
 		headerLines = append(headerLines, effLine)
 	}
+	if histLine := m.formatHistoryLine(); histLine != "" {
+		headerLines = append(headerLines, histLine)
+	}
 	if m.detailCWD != "" {
 		headerLines = append(headerLines, detailLine("cwd", m.detailCWD))
 	}
@@ -1242,6 +1273,7 @@ func (m *model) openDetail() tea.Cmd {
 	m.detailCommand = ""
 	m.detailEff = slurm.JobEfficiency{}
 	m.detailEffSeries = nil
+	m.detailHistoryRuns = nil
 
 	switch m.tab {
 	case tabPartitions:
@@ -1301,7 +1333,29 @@ func (m *model) openDetail() tea.Cmd {
 		}
 	}
 	if m.detailJobID > 0 {
-		return tea.Batch(m.fetchLogTailCmd(m.detailJobID), m.fetchEfficiencyCmd(m.detailJobID))
+		// Find the selected JobRow so we can pass its name to the history query.
+		var name, part string
+		for _, j := range m.lastJobs {
+			if j.JobID == m.detailJobID {
+				name = j.Name
+				part = j.Partition
+				break
+			}
+		}
+		if name == "" {
+			for _, q := range m.lastQueue {
+				if q.JobID == m.detailJobID {
+					name = q.Name
+					part = q.Partition
+					break
+				}
+			}
+		}
+		return tea.Batch(
+			m.fetchLogTailCmd(m.detailJobID),
+			m.fetchEfficiencyCmd(m.detailJobID),
+			m.fetchJobHistoryCmd(m.detailJobID, name, part),
+		)
 	}
 	return nil
 }
@@ -1311,6 +1365,76 @@ func detailLine(label, value string) string {
 }
 
 const detailEffMaxSamples = 60 // 60 samples × 10s tick = 10 minutes of trend
+
+// formatHistoryLine summarizes the sacct query for past runs of the same job
+// name: how many prior runs, mean elapsed, and how this run compares.
+func (m *model) formatHistoryLine() string {
+	if m.detailJobID == 0 || len(m.detailHistoryRuns) == 0 {
+		return ""
+	}
+	// Only completed/failed/timeout/cancelled jobs whose elapsed > 0 count
+	// toward the average; exclude the current run if it's also in the set.
+	var sum time.Duration
+	count := 0
+	for _, r := range m.detailHistoryRuns {
+		if r.ID == m.detailJobID {
+			continue
+		}
+		switch r.State {
+		case "COMPLETED", "FAILED", "TIMEOUT", "CANCELLED":
+		default:
+			continue
+		}
+		if r.Elapsed <= 0 {
+			continue
+		}
+		sum += r.Elapsed
+		count++
+	}
+	if count == 0 {
+		return ""
+	}
+	avg := sum / time.Duration(count)
+
+	var currentRuntime time.Duration
+	var currentState string
+	for _, j := range m.lastJobs {
+		if j.JobID == m.detailJobID {
+			currentRuntime = j.Runtime
+			currentState = j.State
+			break
+		}
+	}
+
+	parts := []string{fmt.Sprintf("%d prior runs · avg %s", count, render.HumanDuration(avg))}
+	if currentRuntime > 0 && avg > 0 {
+		ratio := float64(currentRuntime) / float64(avg)
+		pct := int((ratio - 1) * 100)
+		var marker string
+		if currentState == "RUNNING" {
+			runPct := int(ratio * 100)
+			if runPct < 100 {
+				marker = render.ColorFaint(fmt.Sprintf("this run %s so far (%d%% of avg)", render.HumanDuration(currentRuntime), runPct))
+			} else {
+				marker = render.ColorYellow(fmt.Sprintf("⚠ this run %s — %d%% of avg, may be running long", render.HumanDuration(currentRuntime), runPct))
+			}
+		} else {
+			sign := "+"
+			if pct < 0 {
+				sign = ""
+			}
+			marker = fmt.Sprintf("this run %s (%s%d%% vs avg)", render.HumanDuration(currentRuntime), sign, pct)
+			switch {
+			case pct > 25:
+				marker = render.ColorRed("▲ ") + marker
+			case pct < -25:
+				marker = render.ColorGreen("▼ ") + marker
+			}
+		}
+		parts = append(parts, marker)
+	}
+	return detailLine("history", strings.Join(parts, " · "))
+}
 
 // cpuPercentFromEff turns a JobEfficiency snapshot into a 0-100 CPU%
 // (used / allocated) by finding the matching JobRow for alloc_cpus + runtime.

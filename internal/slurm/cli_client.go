@@ -94,6 +94,25 @@ func (c *cliClient) JobDetail(ctx context.Context, jobID int64) (JobDetail, erro
 	return parseScontrolJobDetail(out)
 }
 
+// JobsByName fetches sacct rows for prior jobs matching the given name (in
+// the given partition, if non-empty) over a recent window. Used by the dash
+// detail overlay to compute 'avg of past runs' for the selected job.
+func (c *cliClient) JobsByName(ctx context.Context, name, partition string, since time.Duration) ([]AcctJob, error) {
+	if since <= 0 {
+		since = 30 * 24 * time.Hour
+	}
+	start := fmt.Sprintf("now-%dminutes", int(since.Minutes()))
+	args := []string{"--json", "--starttime", start, "--allusers", "--name=" + name}
+	if partition != "" {
+		args = append(args, "-r", partition)
+	}
+	out, err := c.run(ctx, c.sacct, args...)
+	if err != nil {
+		return nil, err
+	}
+	return parseSacctJobs(out)
+}
+
 // ClusterName extracts the Slurm cluster name from sinfo --json's meta block.
 // Every Slurm JSON response carries it; reusing sinfo (fast, ~20ms) avoids a
 // second scontrol call.
