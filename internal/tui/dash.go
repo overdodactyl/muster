@@ -62,9 +62,42 @@ type model struct {
 
 	history []historySample
 
+	sortIndex map[tabIdx]int
+	showHelp  bool
+
 	loading   bool
 	lastErr   error
 	lastFetch time.Time
+}
+
+// sortOptions defines which sort keys cycle on `s` for each tab. Tabs not
+// listed (Partitions, Nodes, History) have a single fixed sort.
+var sortOptions = map[tabIdx][]string{
+	tabJobs:   {"cpus", "gpus", "mem", "runtime", "user"},
+	tabUsers:  {"cpus", "gpus", "mem", "jobs", "age"},
+	tabQueue:  {"priority", "age", "user"},
+}
+
+func (m *model) currentSort() string {
+	opts := sortOptions[m.tab]
+	if len(opts) == 0 {
+		return ""
+	}
+	if m.sortIndex == nil {
+		return opts[0]
+	}
+	return opts[m.sortIndex[m.tab]%len(opts)]
+}
+
+func (m *model) cycleSort() {
+	opts := sortOptions[m.tab]
+	if len(opts) == 0 {
+		return
+	}
+	if m.sortIndex == nil {
+		m.sortIndex = map[tabIdx]int{}
+	}
+	m.sortIndex[m.tab] = (m.sortIndex[m.tab] + 1) % len(opts)
 }
 
 // historySample is a per-tick snapshot of the focused partition's
@@ -139,12 +172,25 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
+		// Help overlay swallows any key (and dismisses on most keys).
+		if m.showHelp {
+			switch msg.String() {
+			case "q", "ctrl+c":
+				return m, tea.Quit
+			}
+			m.showHelp = false
+			return m, nil
+		}
 		switch msg.String() {
 		case "q", "ctrl+c", "esc":
 			return m, tea.Quit
+		case "?":
+			m.showHelp = true
 		case "r":
 			m.loading = true
 			return m, m.fetchCmd(true)
+		case "s":
+			m.cycleSort()
 		case "tab", "right", "l":
 			m.tab = (m.tab + 1) % tabIdx(len(tabNames))
 		case "shift+tab", "left", "h":
@@ -198,10 +244,56 @@ func (m *model) View() string {
 	if contentHeight < 5 {
 		contentHeight = 5
 	}
-	content := m.renderTab(contentHeight)
+
+	var content string
+	if m.showHelp {
+		content = m.renderHelp(contentHeight)
+	} else {
+		content = m.renderTab(contentHeight)
+	}
 
 	return lipgloss.JoinVertical(lipgloss.Top, header, summary, content, footer)
 }
+
+func (m *model) renderHelp(maxHeight int) string {
+	body := strings.Join([]string{
+		helpTitleStyle.Render("muster — keys"),
+		"",
+		helpSectionStyle.Render("Navigation"),
+		"  " + helpKeyStyle.Render("1 – 6") + "       jump directly to tab",
+		"  " + helpKeyStyle.Render("tab / ⇧tab") + "  next / previous tab",
+		"  " + helpKeyStyle.Render("h / l") + "       previous / next tab",
+		"",
+		helpSectionStyle.Render("Actions"),
+		"  " + helpKeyStyle.Render("r") + "           refresh now",
+		"  " + helpKeyStyle.Render("s") + "           cycle sort key (jobs, users, queue)",
+		"  " + helpKeyStyle.Render("?") + "           toggle this help",
+		"",
+		helpSectionStyle.Render("Exit"),
+		"  " + helpKeyStyle.Render("q / esc") + "     quit",
+		"",
+		render.ColorFaint("press any key to return"),
+	}, "\n")
+
+	card := helpCardStyle.Render(body)
+	return lipgloss.Place(m.width, maxHeight, lipgloss.Center, lipgloss.Center, card)
+}
+
+var (
+	helpCardStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("63")).
+			Padding(1, 3)
+	helpTitleStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("14"))
+	helpSectionStyle = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(lipgloss.Color("245"))
+	helpKeyStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("11"))
+)
 
 func (m *model) renderHeader() string {
 	title := titleStyle.Render(" muster ")
@@ -232,13 +324,16 @@ func (m *model) renderTab(maxHeight int) string {
 		rows := aggregate.Nodes(m.nodes, m.jobs, m.partition, nil, false, false)
 		render.RenderNodes(&buf, rows, false)
 	case tabJobs:
-		rows := aggregate.Jobs(m.jobs, m.partition, "", false, "cpus", 0, time.Now())
+		sort := orDefault(m.currentSort(), "cpus")
+		rows := aggregate.Jobs(m.jobs, m.partition, "", false, sort, 0, time.Now())
 		render.RenderJobs(&buf, rows)
 	case tabUsers:
-		rows := aggregate.Users(m.jobs, m.partition, "", "cpus", 0, time.Now())
+		sort := orDefault(m.currentSort(), "cpus")
+		rows := aggregate.Users(m.jobs, m.partition, "", sort, 0, time.Now())
 		render.RenderUsers(&buf, rows)
 	case tabQueue:
-		rows := aggregate.Queue(m.jobs, m.partition, false, "", "priority", time.Now())
+		sort := orDefault(m.currentSort(), "priority")
+		rows := aggregate.Queue(m.jobs, m.partition, false, "", sort, time.Now())
 		render.RenderQueue(&buf, rows)
 	case tabHistory:
 		rows := aggregate.History(m.acct, "user", m.partition, nil)
@@ -247,6 +342,13 @@ func (m *model) renderTab(maxHeight int) string {
 	body := strings.TrimRight(buf.String(), "\n")
 	body = clipHeight(body, maxHeight)
 	return contentStyle.Render(body)
+}
+
+func orDefault(s, def string) string {
+	if s == "" {
+		return def
+	}
+	return s
 }
 
 func clipHeight(s string, max int) string {
@@ -271,8 +373,12 @@ func (m *model) renderFooter() string {
 	} else if !m.lastFetch.IsZero() {
 		status = fmt.Sprintf("last update %s", m.lastFetch.Format("15:04:05"))
 	}
-	help := "q quit · r refresh · tab/⇧tab switch · 1-6 jump"
+	help := "? help · q quit · r refresh · tab switch · s sort"
 	left := footerStyle.Render(help)
+
+	if sort := m.currentSort(); sort != "" {
+		status = "sort: " + sort + "  ·  " + status
+	}
 	right := footerStyle.Render(status)
 
 	gap := m.width - lipgloss.Width(left) - lipgloss.Width(right)
