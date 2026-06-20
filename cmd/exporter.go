@@ -22,6 +22,8 @@ var (
 	exporterListen     string
 	exporterRefresh    time.Duration
 	exporterPartitions string
+	exporterQuiet      bool
+	exporterLog        string
 )
 
 var exporterCmd = &cobra.Command{
@@ -45,8 +47,24 @@ Metrics emitted:
   slurm_node_state{node,partition,state}           0|1
   slurm_scrape_seconds                             scrape duration
 
-Use --partitions to restrict to a subset (comma-separated).`,
+Use --partitions to restrict to a subset (comma-separated).
+
+To run in the background:
+
+  nohup muster exporter --log /tmp/muster-exporter.log &     # survives logout
+  systemctl --user start muster-exporter                     # if you've set up a unit
+
+--quiet suppresses the startup message; --log redirects stderr to a file.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if exporterLog != "" {
+			f, err := os.OpenFile(exporterLog, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+			if err != nil {
+				return fmt.Errorf("open log %s: %w", exporterLog, err)
+			}
+			defer f.Close()
+			// Reroute stderr (where we print 'listening on…') to the log.
+			os.Stderr = f
+		}
 		client, err := newClient()
 		if err != nil {
 			return err
@@ -84,7 +102,9 @@ Use --partitions to restrict to a subset (comma-separated).`,
 			_ = srv.Shutdown(ctx)
 		}()
 
-		fmt.Fprintf(os.Stderr, "muster exporter listening on %s (refresh=%s)\n", exporterListen, exporterRefresh)
+		if !exporterQuiet {
+			fmt.Fprintf(os.Stderr, "muster exporter listening on %s (refresh=%s)\n", exporterListen, exporterRefresh)
+		}
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			return err
 		}
@@ -98,6 +118,8 @@ func init() {
 	exporterCmd.Flags().StringVar(&exporterListen, "listen", ":9836", "HTTP listen address (avoid 9100 — that's node_exporter)")
 	exporterCmd.Flags().DurationVar(&exporterRefresh, "refresh", 15*time.Second, "minimum interval between Slurm fetches (cache window)")
 	exporterCmd.Flags().StringVar(&exporterPartitions, "partitions", "", "restrict metrics to these partitions (comma-separated, default = all)")
+	exporterCmd.Flags().BoolVar(&exporterQuiet, "quiet", false, "suppress the startup 'listening on…' message")
+	exporterCmd.Flags().StringVar(&exporterLog, "log", "", "append stderr to this file instead of the terminal (good for background runs)")
 	rootCmd.AddCommand(exporterCmd)
 }
 
