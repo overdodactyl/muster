@@ -117,6 +117,8 @@ type model struct {
 	detailBody     string
 	detailJobID    int64    // non-zero when the detail is a job/queue row
 	detailLogPath  string   // resolved stdout path (for header display)
+	detailCWD      string   // job's working directory
+	detailCommand  string   // job's command/script path
 	detailLogs     []string // captured stdout lines, refreshed each tick while open
 	detailLogErr   error
 	detailViewport viewport.Model // scrollable log viewer (jobs/queue only)
@@ -460,6 +462,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.detailLogs = msg.lines
 			m.detailLogErr = msg.err
 			m.detailLogPath = msg.path
+			m.detailCWD = msg.cwd
+			m.detailCommand = msg.command
 			m.updateDetailViewportContent()
 		}
 		return m, nil
@@ -485,10 +489,12 @@ type cancelResultMsg struct {
 }
 
 type logTailMsg struct {
-	jobID int64
-	path  string
-	lines []string
-	err   error
+	jobID   int64
+	path    string
+	cwd     string
+	command string
+	lines   []string
+	err     error
 }
 
 // detailLogMaxLines caps how many trailing lines we hold for the in-overlay
@@ -497,7 +503,8 @@ type logTailMsg struct {
 const detailLogMaxLines = 2000
 
 // fetchLogTailCmd reads the last N lines of a job's stdout via scontrol +
-// `tail -n N <path>`. Results land as logTailMsg in the Update loop.
+// `tail -n N <path>`. Also passes through the job's cwd and command so the
+// detail overlay can display them. Results land as logTailMsg in Update.
 func (m *model) fetchLogTailCmd(jobID int64) tea.Cmd {
 	c := m.client
 	return func() tea.Msg {
@@ -507,16 +514,24 @@ func (m *model) fetchLogTailCmd(jobID int64) tea.Cmd {
 		if err != nil {
 			return logTailMsg{jobID: jobID, err: err}
 		}
+		msg := logTailMsg{
+			jobID:   jobID,
+			cwd:     d.CurrentWorkingDirectory,
+			command: d.Command,
+		}
 		path := d.StandardOutput
 		if path == "" {
-			return logTailMsg{jobID: jobID, err: fmt.Errorf("interactive session — no stdout file")}
+			msg.err = fmt.Errorf("interactive session — no stdout file")
+			return msg
 		}
+		msg.path = path
 		out, err := exec.CommandContext(ctx, "tail", "-n", fmt.Sprintf("%d", detailLogMaxLines), path).Output()
 		if err != nil {
-			return logTailMsg{jobID: jobID, path: path, err: err}
+			msg.err = err
+			return msg
 		}
-		lines := strings.Split(strings.TrimRight(string(out), "\n"), "\n")
-		return logTailMsg{jobID: jobID, path: path, lines: lines}
+		msg.lines = strings.Split(strings.TrimRight(string(out), "\n"), "\n")
+		return msg
 	}
 }
 
@@ -750,10 +765,17 @@ func (m *model) renderDetailOverlay(maxHeight int) string {
 		return lipgloss.Place(m.width, maxHeight, lipgloss.Center, lipgloss.Center, helpCardStyle.Render(body))
 	}
 
-	header := strings.Join([]string{
+	headerLines := []string{
 		helpTitleStyle.Render(m.detailTitle),
 		m.detailBody,
-	}, "\n")
+	}
+	if m.detailCWD != "" {
+		headerLines = append(headerLines, detailLine("cwd", m.detailCWD))
+	}
+	if m.detailCommand != "" {
+		headerLines = append(headerLines, detailLine("command", m.detailCommand))
+	}
+	header := strings.Join(headerLines, "\n")
 
 	logHeader := helpSectionStyle.Render("stdout")
 	if m.detailLogPath != "" {
@@ -822,6 +844,9 @@ func (m *model) openDetail() tea.Cmd {
 	m.detailJobID = 0
 	m.detailLogs = nil
 	m.detailLogErr = nil
+	m.detailLogPath = ""
+	m.detailCWD = ""
+	m.detailCommand = ""
 
 	switch m.tab {
 	case tabPartitions:
