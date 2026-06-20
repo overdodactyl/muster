@@ -345,7 +345,7 @@ func RenderJobs(w io.Writer, rows []aggregate.JobRow) {
 			nodes = ColorFaint("-")
 		}
 		t.AppendRow(table.Row{
-			r.JobID,
+			formatNewMarker(r.IsNew) + fmt.Sprintf("%d", r.JobID),
 			ColorCyan(r.User),
 			truncate(r.Name, 28),
 			r.Partition,
@@ -358,6 +358,15 @@ func RenderJobs(w io.Writer, rows []aggregate.JobRow) {
 		})
 	}
 	t.Render()
+}
+
+// formatNewMarker returns either a green ● (when the row is newly arrived
+// since the last refresh) or two leading spaces to keep alignment.
+func formatNewMarker(isNew bool) string {
+	if isNew {
+		return ColorGreen("● ")
+	}
+	return "  "
 }
 
 // formatRuntimeCell renders the TIME column. For running jobs with a finite
@@ -406,7 +415,7 @@ func RenderQueue(w io.Writer, rows []aggregate.QueueRow) {
 			reason = ColorYellow(reason)
 		}
 		t.AppendRow(table.Row{
-			r.JobID,
+			formatNewMarker(r.IsNew) + fmt.Sprintf("%d", r.JobID),
 			ColorCyan(r.User),
 			truncate(r.Name, 24),
 			r.CPUs,

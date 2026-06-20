@@ -25,6 +25,9 @@ type QueueRow struct {
 	SubmitTime    time.Time     `json:"submit_time"`
 	SubmitAge     time.Duration `json:"submit_age_ns"`
 	EligibleStart time.Time     `json:"eligible_start,omitempty"`
+
+	// IsNew is set by the TUI when this job appeared since the last refresh.
+	IsNew bool `json:"is_new,omitempty"`
 }
 
 // Queue returns pending jobs (and running too if includeRunning). reasonFilter

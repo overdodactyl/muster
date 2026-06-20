@@ -21,6 +21,10 @@ type JobRow struct {
 	MemoryMB  int           `json:"memory_mb"`
 	Runtime   time.Duration `json:"runtime_ns"`
 	TimeLimit time.Duration `json:"time_limit_ns"`
+
+	// IsNew is set by the TUI (not aggregate) when this job appeared since
+	// the previous refresh — used to flash a green marker on the row.
+	IsNew bool `json:"is_new,omitempty"`
 }
 
 // Jobs returns running jobs (and pending if includePending) sorted by

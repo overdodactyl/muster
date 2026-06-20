@@ -148,6 +148,12 @@ type model struct {
 
 	spinner spinner.Model
 
+	// Job-flash bookkeeping: lastSeenJobs is the set of IDs from the prior
+	// jobsMsg; jobIsNew is the set that appeared in the most recent one. A
+	// job stays "new" only until the next refresh fires.
+	lastSeenJobs map[int64]bool
+	jobIsNew     map[int64]bool
+
 	loading   bool
 	lastErr   error
 	lastFetch time.Time
@@ -454,6 +460,24 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.maybeFinishLoading()
 
 	case jobsMsg:
+		// Compute which job IDs are new since the previous refresh BEFORE
+		// overwriting m.jobs, so the next render can mark them.
+		seenNow := make(map[int64]bool, len(msg.jobs))
+		newIDs := map[int64]bool{}
+		for _, j := range msg.jobs {
+			seenNow[j.ID] = true
+			if m.lastSeenJobs != nil && !m.lastSeenJobs[j.ID] {
+				newIDs[j.ID] = true
+			}
+		}
+		// On the very first refresh, nothing is "new" — only flash after we
+		// have a baseline to compare against.
+		if m.lastSeenJobs == nil {
+			newIDs = nil
+		}
+		m.jobIsNew = newIDs
+		m.lastSeenJobs = seenNow
+
 		m.jobs = msg.jobs
 		m.jobsLoaded = true
 		if msg.err != nil {
@@ -1318,6 +1342,11 @@ func (m *model) renderTabBody() string {
 			}
 			rows = filtered
 		}
+		for i := range rows {
+			if m.jobIsNew[rows[i].JobID] {
+				rows[i].IsNew = true
+			}
+		}
 		m.lastJobs = rows
 		rowCount = len(rows)
 		render.RenderJobs(&buf, rows)
@@ -1348,6 +1377,11 @@ func (m *model) renderTabBody() string {
 				continue
 			}
 			filtered = append(filtered, r)
+		}
+		for i := range filtered {
+			if m.jobIsNew[filtered[i].JobID] {
+				filtered[i].IsNew = true
+			}
 		}
 		m.lastQueue = filtered
 		rowCount = len(filtered)
