@@ -82,6 +82,10 @@ func parseSqueueJobs(b []byte) ([]Job, error) {
 		if gres == "" {
 			gres = j.TresPerJob
 		}
+		arrayTask := -1
+		if j.ArrayTaskID.Set {
+			arrayTask = j.ArrayTaskID.Int()
+		}
 		out = append(out, Job{
 			ID:          j.JobID,
 			User:        j.UserName,
@@ -102,6 +106,8 @@ func parseSqueueJobs(b []byte) ([]Job, error) {
 			EndTime:     j.EndTime.Time(),
 			Priority:    int64(j.Priority.Int()),
 			TimeLimit:   time.Duration(j.TimeLimit.Int()) * time.Minute,
+			ArrayJobID:  int64(j.ArrayJobID.Int()),
+			ArrayTaskID: arrayTask,
 		})
 	}
 	return out, nil

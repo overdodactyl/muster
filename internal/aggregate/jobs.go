@@ -1,6 +1,7 @@
 package aggregate
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -22,6 +23,12 @@ type JobRow struct {
 	Runtime   time.Duration `json:"runtime_ns"`
 	TimeLimit time.Duration `json:"time_limit_ns"`
 
+	// Array-job aggregation: when this row represents a collapsed array
+	// (ArrayCount > 1), JobID holds the array's parent ID and ArrayStates
+	// holds counts per Slurm job_state. Single jobs leave ArrayCount=0.
+	ArrayCount  int            `json:"array_count,omitempty"`
+	ArrayStates map[string]int `json:"array_states,omitempty"`
+
 	// IsNew is set by the TUI (not aggregate) when this job appeared since
 	// the previous refresh — used to flash a green marker on the row.
 	IsNew bool `json:"is_new,omitempty"`
@@ -32,14 +39,24 @@ type JobRow struct {
 }
 
 // Jobs returns running jobs (and pending if includePending) sorted by
-// the requested key. Pass top=0 to return all rows.
+// the requested key. Array-task jobs are collapsed by their array_job_id
+// into one summary row by default; pass expandArrays=true to get one row
+// per task (e.g. for static --expand-arrays).
 //
 //	sortBy: "cpus" (default) | "gpus" | "mem" | "age" | "runtime"
 func Jobs(jobs []slurm.Job, partition, user string, includePending bool, sortBy string, top int, now time.Time) []JobRow {
+	return JobsCollapsed(jobs, partition, user, includePending, false, sortBy, top, now)
+}
+
+// JobsCollapsed is Jobs with control over array-job collapsing. When
+// expandArrays is true, each array task gets its own row; otherwise the
+// tasks are merged into a single summary row per array_job_id.
+func JobsCollapsed(jobs []slurm.Job, partition, user string, includePending, expandArrays bool, sortBy string, top int, now time.Time) []JobRow {
 	if now.IsZero() {
 		now = time.Now()
 	}
-	var out []JobRow
+	// First pass: filter to in-scope jobs and convert to raw rows.
+	var rows []arrayCollapseItem
 	for _, j := range jobs {
 		if partition != "" && j.Partition != partition {
 			continue
@@ -54,7 +71,7 @@ func Jobs(jobs []slurm.Job, partition, user string, includePending bool, sortBy 
 		if j.State == "RUNNING" && !j.StartTime.IsZero() {
 			runtime = now.Sub(j.StartTime)
 		}
-		out = append(out, JobRow{
+		rows = append(rows, arrayCollapseItem{j, JobRow{
 			JobID:     j.ID,
 			User:      j.User,
 			Account:   j.Account,
@@ -67,13 +84,123 @@ func Jobs(jobs []slurm.Job, partition, user string, includePending bool, sortBy 
 			MemoryMB:  jobMemory(j),
 			Runtime:   runtime,
 			TimeLimit: j.TimeLimit,
-		})
+		}})
+	}
+
+	var out []JobRow
+	if expandArrays {
+		for _, it := range rows {
+			out = append(out, it.row)
+		}
+	} else {
+		out = collapseArrays(rows)
 	}
 	sortJobs(out, sortBy)
 	if top > 0 && len(out) > top {
 		out = out[:top]
 	}
 	return out
+}
+
+// arrayCollapseItem pairs the raw slurm.Job (for the IsArrayTask check) with
+// the already-built JobRow that would be emitted if there were no collapsing.
+type arrayCollapseItem struct {
+	raw slurm.Job
+	row JobRow
+}
+
+// collapseArrays groups array tasks (job.IsArrayTask()) by array_job_id into
+// one summary row. Non-array jobs pass through untouched. Aggregated fields
+// (CPUs, GPUs, MemoryMB) sum across tasks; Runtime is the longest of the
+// running tasks; TimeLimit takes the first non-zero value seen.
+func collapseArrays(items []arrayCollapseItem) []JobRow {
+	type group struct {
+		first JobRow
+		sumCPU, sumGPU, sumMem int
+		maxRuntime time.Duration
+		timeLimit  time.Duration
+		states     map[string]int
+		count      int
+		nodes      map[string]bool
+	}
+	groups := map[int64]*group{}
+	var out []JobRow
+	for _, it := range items {
+		if !it.raw.IsArrayTask() {
+			out = append(out, it.row)
+			continue
+		}
+		g, ok := groups[it.raw.ArrayJobID]
+		if !ok {
+			g = &group{
+				first: JobRow{
+					JobID:     it.raw.ArrayJobID,
+					User:      it.row.User,
+					Account:   it.row.Account,
+					Name:      it.row.Name,
+					Partition: it.row.Partition,
+				},
+				states: map[string]int{},
+				nodes:  map[string]bool{},
+			}
+			groups[it.raw.ArrayJobID] = g
+		}
+		g.count++
+		g.sumCPU += it.row.CPUs
+		g.sumGPU += it.row.GPUs
+		g.sumMem += it.row.MemoryMB
+		if it.row.Runtime > g.maxRuntime {
+			g.maxRuntime = it.row.Runtime
+		}
+		if g.timeLimit == 0 && it.row.TimeLimit > 0 {
+			g.timeLimit = it.row.TimeLimit
+		}
+		g.states[it.row.State]++
+		if it.row.Nodes != "" {
+			g.nodes[it.row.Nodes] = true
+		}
+	}
+	for _, g := range groups {
+		row := g.first
+		row.CPUs = g.sumCPU
+		row.GPUs = g.sumGPU
+		row.MemoryMB = g.sumMem
+		row.Runtime = g.maxRuntime
+		row.TimeLimit = g.timeLimit
+		row.ArrayCount = g.count
+		row.ArrayStates = g.states
+		// Pick a representative state for sorting/coloring.
+		row.State = dominantState(g.states)
+		// Nodes summary: count if multi-node, else show the single nodelist.
+		if len(g.nodes) == 1 {
+			for n := range g.nodes {
+				row.Nodes = n
+			}
+		} else if len(g.nodes) > 1 {
+			row.Nodes = fmt.Sprintf("%d nodes", len(g.nodes))
+		}
+		out = append(out, row)
+	}
+	return out
+}
+
+func dominantState(counts map[string]int) string {
+	// Prefer RUNNING > PENDING > anything else.
+	if counts["RUNNING"] > 0 {
+		return "RUNNING"
+	}
+	if counts["PENDING"] > 0 {
+		return "PENDING"
+	}
+	best := ""
+	bestN := 0
+	for s, n := range counts {
+		if n > bestN {
+			best = s
+			bestN = n
+		}
+	}
+	return best
 }
 
 func sortJobs(rows []JobRow, by string) {

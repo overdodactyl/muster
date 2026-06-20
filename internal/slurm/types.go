@@ -38,6 +38,16 @@ type Job struct {
 	EndTime     time.Time
 	Priority    int64
 	TimeLimit   time.Duration
+
+	// Array-job fields. Non-zero ArrayJobID + non-negative ArrayTaskID =>
+	// this Job is one task of an array submitted with sbatch --array.
+	ArrayJobID  int64
+	ArrayTaskID int // -1 when not an array task
+}
+
+// IsArrayTask reports whether this job belongs to a Slurm job array.
+func (j Job) IsArrayTask() bool {
+	return j.ArrayJobID != 0 && j.ArrayTaskID >= 0
 }
 
 // JobDetail is the extra info available via `scontrol show job <id>` that

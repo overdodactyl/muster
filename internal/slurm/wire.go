@@ -68,6 +68,8 @@ type squeueJob struct {
 	StandardError           string   `json:"standard_error"`
 	CurrentWorkingDirectory string   `json:"current_working_directory"`
 	Command                 string   `json:"command"`
+	ArrayJobID              slurmNum `json:"array_job_id"`
+	ArrayTaskID             slurmNum `json:"array_task_id"`
 }
 
 // sacct --json

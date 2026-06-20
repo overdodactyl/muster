@@ -344,8 +344,13 @@ func RenderJobs(w io.Writer, rows []aggregate.JobRow) {
 		if nodes == "" {
 			nodes = ColorFaint("-")
 		}
+		jobIDStr := fmt.Sprintf("%d", r.JobID)
+		if r.ArrayCount > 0 {
+			jobIDStr = fmt.Sprintf("%d_*", r.JobID)
+			state = formatArrayStateSummary(r.ArrayStates)
+		}
 		t.AppendRow(table.Row{
-			formatRowMarker(r.IsSelected, r.IsNew) + fmt.Sprintf("%d", r.JobID),
+			formatRowMarker(r.IsSelected, r.IsNew) + jobIDStr,
 			ColorCyan(r.User),
 			truncate(r.Name, 28),
 			r.Partition,
@@ -358,6 +363,30 @@ func RenderJobs(w io.Writer, rows []aggregate.JobRow) {
 		})
 	}
 	t.Render()
+}
+
+// formatArrayStateSummary turns a state-count map ({RUNNING: 5, PENDING: 3})
+// into a compact colored summary like "R 5 · PD 3" for the array's state cell.
+func formatArrayStateSummary(counts map[string]int) string {
+	parts := []string{}
+	add := func(label, state string, color func(string) string) {
+		if n := counts[state]; n > 0 {
+			parts = append(parts, color(fmt.Sprintf("%s %d", label, n)))
+		}
+	}
+	add("R", "RUNNING", ColorGreen)
+	add("PD", "PENDING", ColorYellow)
+	// Lump anything else under "?" so unexpected states don't disappear.
+	other := 0
+	for s, n := range counts {
+		if s != "RUNNING" && s != "PENDING" {
+			other += n
+		}
+	}
+	if other > 0 {
+		parts = append(parts, ColorFaint(fmt.Sprintf("? %d", other)))
+	}
+	return strings.Join(parts, " · ")
 }
 
 // formatNewMarker returns either a green ● (when the row is newly arrived
