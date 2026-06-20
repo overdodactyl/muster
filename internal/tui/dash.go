@@ -33,11 +33,12 @@ const (
 	tabNodes
 	tabJobs
 	tabUsers
+	tabAccounts
 	tabQueue
 	tabHistory
 )
 
-var tabNames = []string{"Partitions", "Nodes", "Jobs", "Users", "Queue", "History"}
+var tabNames = []string{"Partitions", "Nodes", "Jobs", "Users", "Accounts", "Queue", "History"}
 
 // Run blocks until the user quits the TUI.
 func Run(client slurm.Client, partition string) error {
@@ -117,6 +118,7 @@ type model struct {
 	lastNodes      []aggregate.NodeRow
 	lastJobs       []aggregate.JobRow
 	lastUsers      []aggregate.UserRollup
+	lastAccounts   []aggregate.AccountRollup
 	lastQueue      []aggregate.QueueRow
 	lastHistory    []aggregate.HistoryRow
 
@@ -173,9 +175,10 @@ type model struct {
 // sortOptions defines which sort keys cycle on `s` for each tab. Tabs not
 // listed (Partitions, Nodes, History) have a single fixed sort.
 var sortOptions = map[tabIdx][]string{
-	tabJobs:   {"cpus", "gpus", "mem", "runtime", "user"},
-	tabUsers:  {"cpus", "gpus", "mem", "jobs", "age"},
-	tabQueue:  {"priority", "age", "user"},
+	tabJobs:     {"cpus", "gpus", "mem", "runtime", "user"},
+	tabUsers:    {"cpus", "gpus", "mem", "jobs", "age"},
+	tabAccounts: {"cpus", "gpus", "mem", "jobs", "users", "name"},
+	tabQueue:    {"priority", "age", "user"},
 }
 
 func (m *model) currentSort() string {
@@ -461,8 +464,10 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "4":
 			return m, m.switchTab(tabUsers)
 		case "5":
-			return m, m.switchTab(tabQueue)
+			return m, m.switchTab(tabAccounts)
 		case "6":
+			return m, m.switchTab(tabQueue)
+		case "7":
 			return m, m.switchTab(tabHistory)
 		}
 		// pgup/pgdn/home/end still go to viewport for paging.
@@ -1270,6 +1275,13 @@ func (m *model) openDetail() tea.Cmd {
 			m.detailBody = renderUserDetail(u)
 			m.detailOpen = true
 		}
+	case tabAccounts:
+		if cur < len(m.lastAccounts) {
+			a := m.lastAccounts[cur]
+			m.detailTitle = "Account " + a.Account
+			m.detailBody = renderAccountDetail(a)
+			m.detailOpen = true
+		}
 	case tabQueue:
 		if cur < len(m.lastQueue) {
 			q := m.lastQueue[cur]
@@ -1447,6 +1459,18 @@ func renderJobDetail(j aggregate.JobRow) string {
 	return strings.Join(lines, "\n")
 }
 
+func renderAccountDetail(a aggregate.AccountRollup) string {
+	return strings.Join([]string{
+		detailLine("distinct users", fmt.Sprintf("%d", a.Users)),
+		detailLine("running", fmt.Sprintf("%d jobs", a.Running)),
+		detailLine("pending", fmt.Sprintf("%d jobs", a.Pending)),
+		detailLine("cpus held", fmt.Sprintf("%d", a.CPUsHeld)),
+		detailLine("gpus held", fmt.Sprintf("%d", a.GPUsHeld)),
+		detailLine("memory", render.HumanMB(a.MemoryMBHeld)),
+		detailLine("oldest run", render.HumanDuration(a.OldestRunAge)),
+	}, "\n")
+}
+
 func renderUserDetail(u aggregate.UserRollup) string {
 	return strings.Join([]string{
 		detailLine("running", fmt.Sprintf("%d jobs", u.Running)),
@@ -1499,7 +1523,7 @@ func (m *model) renderHelp(maxHeight int) string {
 		helpTitleStyle.Render("muster — keys"),
 		"",
 		helpSectionStyle.Render("Navigation"),
-		"  " + helpKeyStyle.Render("1 – 6") + "       jump directly to tab",
+		"  " + helpKeyStyle.Render("1 – 7") + "       jump directly to tab",
 		"  " + helpKeyStyle.Render("tab / ⇧tab") + "  next / previous tab",
 		"  " + helpKeyStyle.Render("h / l") + "       previous / next tab",
 		"",
@@ -1694,6 +1718,21 @@ func (m *model) renderTabBody() string {
 		m.lastUsers = rows
 		rowCount = len(rows)
 		render.RenderUsers(&buf, rows)
+	case tabAccounts:
+		sort := orDefault(m.currentSort(), "cpus")
+		rows := aggregate.Accounts(m.jobs, m.partition, sort, 0, time.Now())
+		if f != "" {
+			filtered := rows[:0]
+			for _, r := range rows {
+				if contains(r.Account) {
+					filtered = append(filtered, r)
+				}
+			}
+			rows = filtered
+		}
+		m.lastAccounts = rows
+		rowCount = len(rows)
+		render.RenderAccounts(&buf, rows)
 	case tabQueue:
 		sort := orDefault(m.currentSort(), "priority")
 		rows := aggregate.Queue(m.jobs, m.partition, false, "", sort, time.Now())
@@ -1821,7 +1860,7 @@ func (m *model) renderFooter() string {
 	} else if !m.lastFetch.IsZero() {
 		status = fmt.Sprintf("last update %s", m.lastFetch.Format("15:04:05"))
 	}
-	help := "? help · q quit · r refresh · tab · s sort · / filter · m me · space select · c cancel"
+	help := "? help · q · r refresh · tab · 1-7 · s sort · / filter · m me · space select · c cancel"
 	if m.meMode {
 		help += "  ·  " + render.ColorYellow("Me mode")
 	}

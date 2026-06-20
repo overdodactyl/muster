@@ -167,6 +167,30 @@ func RenderNodes(w io.Writer, rows []aggregate.NodeRow, showJobs bool) {
 	t.Render()
 }
 
+func RenderAccounts(w io.Writer, rows []aggregate.AccountRollup) {
+	if w == nil {
+		w = os.Stdout
+	}
+	if len(rows) == 0 {
+		fmt.Fprintln(w, "no accounts with jobs in this scope")
+		return
+	}
+	t := newTable(w, []string{"ACCOUNT", "USERS", "RUN", "PEND", "CPUS", "GPUS", "MEM", "OLDEST RUN"})
+	for _, r := range rows {
+		t.AppendRow(table.Row{
+			ColorCyan(r.Account),
+			r.Users,
+			r.Running,
+			r.Pending,
+			r.CPUsHeld,
+			r.GPUsHeld,
+			HumanMB(r.MemoryMBHeld),
+			HumanDuration(r.OldestRunAge),
+		})
+	}
+	t.Render()
+}
+
 func RenderUsers(w io.Writer, rows []aggregate.UserRollup) {
 	if w == nil {
 		w = os.Stdout
