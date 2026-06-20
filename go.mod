@@ -4,7 +4,7 @@ go 1.24
 
 require (
 	github.com/fatih/color v1.18.0
-	github.com/olekukonko/tablewriter v0.0.5
+	github.com/jedib0t/go-pretty/v6 v6.8.1
 	github.com/spf13/cobra v1.9.1
 )
 
@@ -16,4 +16,5 @@ require (
 	github.com/mattn/go-runewidth v0.0.19 // indirect
 	github.com/spf13/pflag v1.0.6 // indirect
 	golang.org/x/sys v0.30.0 // indirect
+	golang.org/x/text v0.22.0 // indirect
 )

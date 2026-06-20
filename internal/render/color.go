@@ -8,6 +8,7 @@ var (
 	cGreen  = color.New(color.FgGreen).SprintFunc()
 	cCyan   = color.New(color.FgCyan).SprintFunc()
 	cBold   = color.New(color.Bold).SprintFunc()
+	cFaint  = color.New(color.Faint).SprintFunc()
 )
 
 func ColorState(class string) string {
@@ -32,4 +33,5 @@ func ColorRed(s string) string    { return cRed(s) }
 func ColorYellow(s string) string { return cYellow(s) }
 func ColorGreen(s string) string  { return cGreen(s) }
 func ColorCyan(s string) string   { return cCyan(s) }
+func ColorFaint(s string) string  { return cFaint(s) }
 func Bold(s string) string        { return cBold(s) }

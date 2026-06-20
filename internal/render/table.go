@@ -6,21 +6,35 @@ import (
 	"os"
 	"strings"
 
-	"github.com/olekukonko/tablewriter"
+	"github.com/fatih/color"
+	"github.com/jedib0t/go-pretty/v6/table"
+	"github.com/jedib0t/go-pretty/v6/text"
 
 	"muster/internal/aggregate"
 )
 
-func newTable(w io.Writer, headers []string) *tablewriter.Table {
-	t := tablewriter.NewWriter(w)
-	t.SetHeader(headers)
-	t.SetAlignment(tablewriter.ALIGN_LEFT)
-	t.SetAutoWrapText(false)
-	t.SetBorder(true)
-	t.SetCenterSeparator("+")
-	t.SetColumnSeparator("|")
-	t.SetRowSeparator("-")
-	t.SetHeaderAlignment(tablewriter.ALIGN_LEFT)
+// newTable returns a go-pretty table writer with the project-wide style:
+// rounded unicode borders, left-aligned cells, no auto-wrap, bold-cyan
+// headers, and zebra-striped rows for scannability.
+func newTable(w io.Writer, headers []string) table.Writer {
+	t := table.NewWriter()
+	t.SetOutputMirror(w)
+
+	hdr := make(table.Row, len(headers))
+	for i, h := range headers {
+		hdr[i] = h
+	}
+	t.AppendHeader(hdr)
+
+	style := table.StyleRounded
+	style.Options.SeparateRows = false
+	if !color.NoColor {
+		style.Color.Header = text.Colors{text.FgHiCyan, text.Bold}
+		style.Color.Border = text.Colors{text.Faint}
+		style.Color.Separator = text.Colors{text.Faint}
+	}
+	t.SetStyle(style)
+
 	return t
 }
 
@@ -53,7 +67,7 @@ func RenderPartitions(w io.Writer, rows []aggregate.PartitionSummary) {
 		fmt.Fprintln(w, "no partitions matched")
 		return
 	}
-	t := newTable(w, []string{"PARTITION", "NODES I/M/A/D", "CPUS A/T", "GPUS A/T", "MEM A/T", "RUN", "PEND"})
+	t := newTable(w, []string{"PARTITION", "NODES I/M/A/D", "CPUS", "GPUS", "MEM", "RUN", "PEND"})
 	for _, r := range rows {
 		gpus := "-"
 		if r.TotalGPUs > 0 {
@@ -61,29 +75,22 @@ func RenderPartitions(w io.Writer, rows []aggregate.PartitionSummary) {
 			if r.GPUModel != "" {
 				model = " " + r.GPUModel
 			}
-			gpus = fmt.Sprintf("%d/%d%s", r.AllocGPUs, r.TotalGPUs, model)
-			if r.AllocGPUs == 0 {
-				gpus = ColorGreen(gpus)
-			} else if r.AllocGPUs >= r.TotalGPUs {
-				gpus = ColorRed(gpus)
-			} else {
-				gpus = ColorYellow(gpus)
-			}
+			gpus = fmt.Sprintf("%d/%d%s  %s", r.AllocGPUs, r.TotalGPUs, model, Bar(r.AllocGPUs, r.TotalGPUs, 10))
 		}
-		cpus := fmt.Sprintf("%d/%d", r.AllocCPUs, r.TotalCPUs)
-		mem := fmt.Sprintf("%s/%s", HumanMB(r.AllocMemMB), HumanMB(r.TotalMemMB))
-		t.Append([]string{
+		cpus := fmt.Sprintf("%d/%d  %s", r.AllocCPUs, r.TotalCPUs, Bar(r.AllocCPUs, r.TotalCPUs, 10))
+		mem := fmt.Sprintf("%s/%s  %s", HumanMB(r.AllocMemMB), HumanMB(r.TotalMemMB), Bar(r.AllocMemMB, r.TotalMemMB, 10))
+		t.AppendRow(table.Row{
 			ColorCyan(r.Name),
 			fmtStateCounts(r.NodeCounts),
 			cpus,
 			gpus,
 			mem,
-			fmt.Sprintf("%d", r.RunningJobs),
-			fmt.Sprintf("%d", r.PendingJobs),
+			r.RunningJobs,
+			r.PendingJobs,
 		})
 	}
 	t.Render()
-	fmt.Fprintln(w, "Legend: I=idle  M=mixed  A=alloc  D=down/drain   CPUS A/T=allocated/total  MEM A/T=allocated/total")
+	fmt.Fprintln(w, ColorFaint("legend: I/M/A/D = idle/mixed/alloc/down+drain   bar = allocated share"))
 }
 
 func RenderNodes(w io.Writer, rows []aggregate.NodeRow, showJobs bool) {
@@ -94,25 +101,17 @@ func RenderNodes(w io.Writer, rows []aggregate.NodeRow, showJobs bool) {
 		fmt.Fprintln(w, "no nodes matched")
 		return
 	}
-	headers := []string{"NODE", "PART", "STATE", "CPUS A/I/T", "MEM USED/T", "GPU A/T", "USERS"}
-	t := newTable(w, headers)
+	t := newTable(w, []string{"NODE", "PART", "STATE", "CPUS", "MEM", "GPU", "USERS"})
 	for _, r := range rows {
-		gpu := "-"
+		gpu := ColorFaint("-")
 		if r.GPUsTotal > 0 {
 			model := ""
 			if r.GPUModel != "" {
 				model = " " + r.GPUModel
 			}
-			gpu = fmt.Sprintf("%d/%d%s", r.GPUsAlloc, r.GPUsTotal, model)
-			if r.GPUsAlloc == 0 {
-				gpu = ColorGreen(gpu)
-			} else if r.GPUsAlloc >= r.GPUsTotal {
-				gpu = ColorRed(gpu)
-			} else {
-				gpu = ColorYellow(gpu)
-			}
+			gpu = fmt.Sprintf("%d/%d%s  %s", r.GPUsAlloc, r.GPUsTotal, model, Bar(r.GPUsAlloc, r.GPUsTotal, 6))
 		}
-		users := "-"
+		users := ColorFaint("-")
 		if showJobs && len(r.UserJobs) > 0 {
 			users = JoinList(r.UserJobs, 6)
 		} else if len(r.Users) > 0 {
@@ -122,12 +121,18 @@ func RenderNodes(w io.Writer, rows []aggregate.NodeRow, showJobs bool) {
 			}
 			users = JoinList(coloured, 6)
 		}
-		t.Append([]string{
+		memUsed := r.MemTotalMB - r.MemFreeMB
+		if memUsed < r.MemAllocMB {
+			memUsed = r.MemAllocMB
+		}
+		cpus := fmt.Sprintf("%d/%d  %s", r.CPUsAlloc, r.CPUsTotal, Bar(r.CPUsAlloc, r.CPUsTotal, 8))
+		mem := fmt.Sprintf("%s/%s  %s", HumanMB(memUsed), HumanMB(r.MemTotalMB), Bar(memUsed, r.MemTotalMB, 8))
+		t.AppendRow(table.Row{
 			ColorCyan(r.Name),
 			r.Partition,
 			ColorState(r.StateClass),
-			fmt.Sprintf("%d/%d/%d", r.CPUsAlloc, r.CPUsIdle, r.CPUsTotal),
-			fmt.Sprintf("%s/%s", HumanMB(r.MemAllocMB), HumanMB(r.MemTotalMB)),
+			cpus,
+			mem,
 			gpu,
 			users,
 		})
@@ -145,12 +150,12 @@ func RenderUsers(w io.Writer, rows []aggregate.UserRollup) {
 	}
 	t := newTable(w, []string{"USER", "RUN", "PEND", "CPUS", "GPUS", "MEM", "OLDEST RUN"})
 	for _, r := range rows {
-		t.Append([]string{
+		t.AppendRow(table.Row{
 			ColorCyan(r.User),
-			fmt.Sprintf("%d", r.Running),
-			fmt.Sprintf("%d", r.Pending),
-			fmt.Sprintf("%d", r.CPUsHeld),
-			fmt.Sprintf("%d", r.GPUsHeld),
+			r.Running,
+			r.Pending,
+			r.CPUsHeld,
+			r.GPUsHeld,
 			HumanMB(r.MemoryMBHeld),
 			HumanDuration(r.OldestRunAge),
 		})
@@ -176,20 +181,19 @@ func RenderQueue(w io.Writer, rows []aggregate.QueueRow) {
 		if reason == "" {
 			reason = "-"
 		}
-		reasonH := r.ReasonHuman
 		switch r.Reason {
 		case "JobHeldUser", "JobHeldAdmin", "DependencyNeverSatisfied":
 			reason = ColorYellow(reason)
 		}
-		t.Append([]string{
-			fmt.Sprintf("%d", r.JobID),
+		t.AppendRow(table.Row{
+			r.JobID,
 			ColorCyan(r.User),
-			fmt.Sprintf("%d", r.CPUs),
+			r.CPUs,
 			gpu,
 			HumanMB(r.MemoryMB),
-			fmt.Sprintf("%d", r.Priority),
+			r.Priority,
 			reason,
-			reasonH,
+			r.ReasonHuman,
 		})
 	}
 	t.Render()
@@ -216,13 +220,13 @@ func RenderHistory(w io.Writer, rows []aggregate.HistoryRow, keyHeader string) {
 		if r.Timeout > 0 {
 			to = ColorRed(to)
 		}
-		t.Append([]string{
+		t.AppendRow(table.Row{
 			ColorCyan(r.Key),
-			fmt.Sprintf("%d", r.Jobs),
-			fmt.Sprintf("%d", r.Completed),
+			r.Jobs,
+			r.Completed,
 			fail,
 			to,
-			fmt.Sprintf("%d", r.Cancelled),
+			r.Cancelled,
 			fmt.Sprintf("%.1f", r.CPUHours),
 			fmt.Sprintf("%.1f", r.GPUHours),
 		})
