@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
+	"strings"
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
@@ -16,6 +18,7 @@ var (
 	flagNoColor   bool
 	flagUser      string
 	flagCluster   string
+	flagTheme     string
 )
 
 var rootCmd = &cobra.Command{
@@ -29,6 +32,22 @@ insight with reason codes explained, and recent sacct history.`,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		if flagNoColor || flagJSON {
 			color.NoColor = true
+		}
+		switch flagTheme {
+		case "light":
+			render.SetTheme(render.ThemeLight)
+		case "dark", "":
+			render.SetTheme(render.ThemeDark)
+		case "auto":
+			// COLORFGBG is set by some terminals (rxvt, others) as "fg;bg".
+			// Values >=15 in the bg slot generally mean a light background.
+			fg, bg := parseColorFGBG(os.Getenv("COLORFGBG"))
+			_ = fg
+			if bg >= 10 {
+				render.SetTheme(render.ThemeLight)
+			} else {
+				render.SetTheme(render.ThemeDark)
+			}
 		}
 		// Cap table width to the terminal so narrow shells don't break the
 		// layout. Skip when output isn't a TTY (piping); go-pretty's default
@@ -47,6 +66,23 @@ func init() {
 	rootCmd.PersistentFlags().BoolVar(&flagNoColor, "no-color", false, "disable colored output")
 	rootCmd.PersistentFlags().StringVarP(&flagUser, "user", "u", "", "filter to a single user (where applicable)")
 	rootCmd.PersistentFlags().StringVar(&flagCluster, "cluster", "", "Slurm cluster name (passed to -M); v1 supports a single cluster")
+	rootCmd.PersistentFlags().StringVar(&flagTheme, "theme", "dark", "color theme: dark | light | auto (auto reads $COLORFGBG)")
+}
+
+// parseColorFGBG splits the rxvt-style "fg;bg" env value into ints. Returns
+// (0,0) for unparseable values.
+func parseColorFGBG(s string) (int, int) {
+	if s == "" {
+		return 0, 0
+	}
+	var fg, bg int
+	parts := strings.Split(s, ";")
+	if len(parts) < 2 {
+		return 0, 0
+	}
+	fmt.Sscanf(parts[0], "%d", &fg)
+	fmt.Sscanf(parts[len(parts)-1], "%d", &bg)
+	return fg, bg
 }
 
 func Execute() {

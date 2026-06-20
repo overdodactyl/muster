@@ -2132,13 +2132,18 @@ func highlightDataRow(body string, rowIdx int) string {
 // every internal `\x1b[0m` reset — go-pretty emits resets around each colored
 // cell, and a naive outer bg would drop on the first reset and never come
 // back, leaving the background visible only on the leftmost piece of the row.
+//
+// The bg color depends on the active render.Theme: dark-mode uses ANSI 238
+// (very dark gray); light-mode uses 254 (very light gray) so the cursor row
+// is visible against a white-ish terminal background.
 func tintRow(line string) string {
-	const bgOn = "\x1b[48;5;238m"
-	const bgOff = "\x1b[0m"
+	bgOn := "\x1b[48;5;238m"
+	if render.CurrentTheme() == render.ThemeLight {
+		bgOn = "\x1b[48;5;254m"
+	}
 	const reset = "\x1b[0m"
-	// Replace every internal reset with reset + re-application of bg.
 	patched := strings.ReplaceAll(line, reset, reset+bgOn)
-	return bgOn + patched + bgOff
+	return bgOn + patched + reset
 }
 
 // cursorMarker is the leftmost indicator on the selected row: a bold cyan ▶.
