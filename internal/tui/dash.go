@@ -56,6 +56,8 @@ func Run(client slurm.Client, partition string) error {
 		loading:     true,
 		filterInput: ti,
 		spinner:     sp,
+		cursor:      map[tabIdx]int{},
+		rowCounts:   map[tabIdx]int{},
 	}
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	_, err := p.Run()
@@ -92,6 +94,9 @@ type model struct {
 
 	viewport      viewport.Model
 	viewportReady bool
+
+	cursor    map[tabIdx]int
+	rowCounts map[tabIdx]int
 
 	spinner spinner.Model
 
@@ -259,6 +264,20 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "m":
 			m.meMode = !m.meMode
 			m.viewport.GotoTop()
+		case "j", "down":
+			m.moveCursor(1)
+			return m, nil
+		case "k", "up":
+			m.moveCursor(-1)
+			return m, nil
+		case "g":
+			m.cursor[m.tab] = 0
+			m.viewport.GotoTop()
+			return m, nil
+		case "G":
+			m.cursor[m.tab] = m.rowCounts[m.tab] - 1
+			m.ensureCursorVisible()
+			return m, nil
 		case "/":
 			m.filterMode = true
 			m.filterInput.SetValue(m.filter)
@@ -267,33 +286,41 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "tab", "right", "l":
 			m.tab = (m.tab + 1) % tabIdx(len(tabNames))
 			m.viewport.GotoTop()
+			m.clampCursor()
 		case "shift+tab", "left", "h":
 			m.tab = (m.tab - 1 + tabIdx(len(tabNames))) % tabIdx(len(tabNames))
 			m.viewport.GotoTop()
+			m.clampCursor()
 		case "1":
 			m.tab = tabPartitions
 			m.viewport.GotoTop()
+			m.clampCursor()
 		case "2":
 			m.tab = tabNodes
 			m.viewport.GotoTop()
+			m.clampCursor()
 		case "3":
 			m.tab = tabJobs
 			m.viewport.GotoTop()
+			m.clampCursor()
 		case "4":
 			m.tab = tabUsers
 			m.viewport.GotoTop()
+			m.clampCursor()
 		case "5":
 			m.tab = tabQueue
 			m.viewport.GotoTop()
+			m.clampCursor()
 		case "6":
 			m.tab = tabHistory
 			m.viewport.GotoTop()
+			m.clampCursor()
 			if !m.acctLoaded && !m.acctInFlight {
 				m.acctInFlight = true
 				return m, m.fetchAcctCmd()
 			}
 		}
-		// Delegate remaining keys (j/k/up/down/pgup/pgdn/home/end) to viewport.
+		// pgup/pgdn/home/end still go to viewport for paging.
 		var cmd tea.Cmd
 		m.viewport, cmd = m.viewport.Update(msg)
 		return m, cmd
@@ -356,6 +383,47 @@ func (m *model) maybeFinishLoading() {
 	if m.nodesLoaded && m.jobsLoaded {
 		m.loading = false
 		m.recordSample()
+	}
+}
+
+func (m *model) moveCursor(delta int) {
+	m.cursor[m.tab] += delta
+	m.clampCursor()
+	m.ensureCursorVisible()
+}
+
+func (m *model) clampCursor() {
+	n := m.rowCounts[m.tab]
+	if m.cursor[m.tab] < 0 || n == 0 {
+		m.cursor[m.tab] = 0
+	}
+	if n > 0 && m.cursor[m.tab] >= n {
+		m.cursor[m.tab] = n - 1
+	}
+}
+
+// tableHeaderLines is the number of lines before the first data row in a
+// go-pretty rounded-border table: top border + header + header separator.
+const tableHeaderLines = 3
+
+func (m *model) ensureCursorVisible() {
+	n := m.rowCounts[m.tab]
+	if n == 0 || m.viewport.Height == 0 {
+		return
+	}
+	bodyLine := tableHeaderLines + m.cursor[m.tab]
+	top := m.viewport.YOffset
+	// One row below the bottom edge of what's visible (exclusive).
+	visibleHeight := m.viewport.Height
+	bottom := top + visibleHeight
+	switch {
+	case bodyLine < top:
+		m.viewport.SetYOffset(bodyLine - 1)
+	case bodyLine >= bottom:
+		m.viewport.SetYOffset(bodyLine - visibleHeight + 1)
+	}
+	if m.viewport.YOffset < 0 {
+		m.viewport.SetYOffset(0)
 	}
 }
 
@@ -457,7 +525,8 @@ func (m *model) renderHelp(maxHeight int) string {
 		"  " + helpKeyStyle.Render("s") + "           cycle sort key (jobs, users, queue)",
 		"  " + helpKeyStyle.Render("/") + "           filter rows (name/user/reason)",
 		"  " + helpKeyStyle.Render("m") + "           toggle Me mode (your jobs only)",
-		"  " + helpKeyStyle.Render("↑ / ↓ / k / j") + "  scroll one line",
+		"  " + helpKeyStyle.Render("↑ / ↓ / k / j") + "  move selection cursor",
+		"  " + helpKeyStyle.Render("g / G") + "       jump to first / last row",
 		"  " + helpKeyStyle.Render("pgup / pgdn") + " scroll one page",
 		"  " + helpKeyStyle.Render("?") + "           toggle this help",
 		"",
@@ -539,6 +608,7 @@ func (m *model) renderTabBody() string {
 		return false
 	}
 
+	rowCount := 0
 	switch m.tab {
 	case tabPartitions:
 		rows := aggregate.Partitions(m.nodes, m.jobs, m.partition)
@@ -551,6 +621,7 @@ func (m *model) renderTabBody() string {
 			}
 			rows = filtered
 		}
+		rowCount = len(rows)
 		render.RenderPartitions(&buf, rows)
 	case tabNodes:
 		rows := aggregate.Nodes(m.nodes, m.jobs, m.partition, nil, false, false)
@@ -564,6 +635,7 @@ func (m *model) renderTabBody() string {
 			}
 			filtered = append(filtered, r)
 		}
+		rowCount = len(filtered)
 		render.RenderNodes(&buf, filtered, false)
 	case tabJobs:
 		sort := orDefault(m.currentSort(), "cpus")
@@ -577,6 +649,7 @@ func (m *model) renderTabBody() string {
 			}
 			rows = filtered
 		}
+		rowCount = len(rows)
 		render.RenderJobs(&buf, rows)
 	case tabUsers:
 		sort := orDefault(m.currentSort(), "cpus")
@@ -590,6 +663,7 @@ func (m *model) renderTabBody() string {
 			}
 			rows = filtered
 		}
+		rowCount = len(rows)
 		render.RenderUsers(&buf, rows)
 	case tabQueue:
 		sort := orDefault(m.currentSort(), "priority")
@@ -604,6 +678,7 @@ func (m *model) renderTabBody() string {
 			}
 			filtered = append(filtered, r)
 		}
+		rowCount = len(filtered)
 		render.RenderQueue(&buf, filtered)
 	case tabHistory:
 		rows := aggregate.History(m.acct, "user", m.partition, nil)
@@ -617,10 +692,45 @@ func (m *model) renderTabBody() string {
 			}
 			filtered = append(filtered, r)
 		}
+		rowCount = len(filtered)
 		render.RenderHistory(&buf, filtered, "user")
 	}
+
+	m.rowCounts[m.tab] = rowCount
+	m.clampCursor()
+
 	body := strings.TrimRight(buf.String(), "\n")
-	return contentStyle.Render(body)
+	if rowCount > 0 {
+		body = highlightDataRow(body, m.cursor[m.tab])
+	}
+	return body
+}
+
+// highlightDataRow wraps the Nth data row of a go-pretty rendered table in
+// ANSI reverse-video. Header is skipped (it's the first `│`-prefixed line);
+// border lines (╭ ├ ╰) are skipped because they don't start with `│`.
+func highlightDataRow(body string, rowIdx int) string {
+	const reverseStart = "\x1b[7m"
+	const reverseEnd = "\x1b[27m"
+
+	lines := strings.Split(body, "\n")
+	dataIdx := -1
+	for i, line := range lines {
+		// Locate the column-separator on this line. Borders use ┬ ┼ ┴ chars.
+		if !strings.Contains(line, "│") {
+			continue
+		}
+		if dataIdx == -1 {
+			// First │-bearing line is the header.
+			dataIdx = 0
+			continue
+		}
+		if dataIdx == rowIdx {
+			lines[i] = reverseStart + line + reverseEnd
+		}
+		dataIdx++
+	}
+	return strings.Join(lines, "\n")
 }
 
 func orDefault(s, def string) string {
@@ -680,5 +790,4 @@ var (
 			Background(lipgloss.Color("236"))
 	footerStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("245"))
-	contentStyle = lipgloss.NewStyle().Padding(1, 1)
 )
