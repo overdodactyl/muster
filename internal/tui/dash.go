@@ -1026,32 +1026,45 @@ func (m *model) renderTabBody() string {
 	return body
 }
 
-// highlightDataRow wraps the Nth data row of a go-pretty rendered table in
-// ANSI reverse-video. Header is skipped (it's the first `│`-prefixed line);
-// border lines (╭ ├ ╰) are skipped because they don't start with `│`.
+// highlightDataRow draws a soft-background tint plus a leading ▶ marker on
+// the Nth data row of a go-pretty rendered table (k9s / lazygit pattern).
+// All other lines get a leading space so the table stays horizontally aligned
+// across the cursor and non-cursor rows.
+//
+// Header is the first `│`-bearing line; border lines (╭ ├ ╰) lack `│` and are
+// shifted right by a space too.
 func highlightDataRow(body string, rowIdx int) string {
-	const reverseStart = "\x1b[7m"
-	const reverseEnd = "\x1b[27m"
-
 	lines := strings.Split(body, "\n")
 	dataIdx := -1
 	for i, line := range lines {
-		// Locate the column-separator on this line. Borders use ┬ ┼ ┴ chars.
 		if !strings.Contains(line, "│") {
+			// border line — just shift right by one space for alignment
+			lines[i] = " " + line
 			continue
 		}
 		if dataIdx == -1 {
-			// First │-bearing line is the header.
+			lines[i] = " " + line // header line
 			dataIdx = 0
 			continue
 		}
 		if dataIdx == rowIdx {
-			lines[i] = reverseStart + line + reverseEnd
+			lines[i] = cursorRowStyle.Render(cursorMarker + line)
+		} else {
+			lines[i] = " " + line
 		}
 		dataIdx++
 	}
 	return strings.Join(lines, "\n")
 }
+
+var (
+	cursorRowStyle = lipgloss.NewStyle().
+			Background(lipgloss.Color("238"))
+	cursorMarker = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("14")).
+			Bold(true).
+			Render("▶")
+)
 
 func orDefault(s, def string) string {
 	if s == "" {
