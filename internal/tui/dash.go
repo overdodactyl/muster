@@ -98,6 +98,20 @@ type model struct {
 	cursor    map[tabIdx]int
 	rowCounts map[tabIdx]int
 
+	// Cache of the most-recently-rendered slice per tab, used by the
+	// Enter-to-drill detail overlay to look up the selected row without
+	// re-running the filter/sort pipeline.
+	lastPartitions []aggregate.PartitionSummary
+	lastNodes      []aggregate.NodeRow
+	lastJobs       []aggregate.JobRow
+	lastUsers      []aggregate.UserRollup
+	lastQueue      []aggregate.QueueRow
+	lastHistory    []aggregate.HistoryRow
+
+	detailOpen  bool
+	detailTitle string
+	detailBody  string
+
 	spinner spinner.Model
 
 	loading   bool
@@ -246,6 +260,15 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.showHelp = false
 			return m, nil
 		}
+		// Detail overlay swallows any key (most dismiss).
+		if m.detailOpen {
+			switch msg.String() {
+			case "q", "ctrl+c":
+				return m, tea.Quit
+			}
+			m.detailOpen = false
+			return m, nil
+		}
 		switch msg.String() {
 		case "q", "ctrl+c", "esc":
 			return m, tea.Quit
@@ -277,6 +300,9 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "G":
 			m.cursor[m.tab] = m.rowCounts[m.tab] - 1
 			m.ensureCursorVisible()
+			return m, nil
+		case "enter":
+			m.openDetail()
 			return m, nil
 		case "/":
 			m.filterMode = true
@@ -446,6 +472,8 @@ func (m *model) View() string {
 	switch {
 	case m.showHelp:
 		content = m.renderHelp(contentHeight)
+	case m.detailOpen:
+		content = m.renderDetailOverlay(contentHeight)
 	case !m.nodesLoaded || !m.jobsLoaded:
 		content = m.renderLoading(contentHeight)
 	case m.tab == tabHistory && !m.acctLoaded:
@@ -511,6 +539,183 @@ func (m *model) resizeViewport() {
 	}
 }
 
+func (m *model) renderDetailOverlay(maxHeight int) string {
+	body := strings.Join([]string{
+		helpTitleStyle.Render(m.detailTitle),
+		"",
+		m.detailBody,
+		"",
+		render.ColorFaint("press any key to return"),
+	}, "\n")
+	card := helpCardStyle.Render(body)
+	return lipgloss.Place(m.width, maxHeight, lipgloss.Center, lipgloss.Center, card)
+}
+
+func (m *model) openDetail() {
+	cur := m.cursor[m.tab]
+	if cur < 0 || cur >= m.rowCounts[m.tab] {
+		return
+	}
+
+	switch m.tab {
+	case tabPartitions:
+		if cur < len(m.lastPartitions) {
+			p := m.lastPartitions[cur]
+			m.detailTitle = "Partition " + p.Name
+			m.detailBody = renderPartitionDetail(p)
+			m.detailOpen = true
+		}
+	case tabNodes:
+		if cur < len(m.lastNodes) {
+			n := m.lastNodes[cur]
+			m.detailTitle = "Node " + n.Name
+			m.detailBody = renderNodeDetail(n)
+			m.detailOpen = true
+		}
+	case tabJobs:
+		if cur < len(m.lastJobs) {
+			j := m.lastJobs[cur]
+			m.detailTitle = fmt.Sprintf("Job %d  %s / %s", j.JobID, j.User, j.Name)
+			m.detailBody = renderJobDetail(j)
+			m.detailOpen = true
+		}
+	case tabUsers:
+		if cur < len(m.lastUsers) {
+			u := m.lastUsers[cur]
+			m.detailTitle = "User " + u.User
+			m.detailBody = renderUserDetail(u)
+			m.detailOpen = true
+		}
+	case tabQueue:
+		if cur < len(m.lastQueue) {
+			q := m.lastQueue[cur]
+			m.detailTitle = fmt.Sprintf("Pending job %d  %s / %s", q.JobID, q.User, q.Name)
+			m.detailBody = renderQueueDetail(q)
+			m.detailOpen = true
+		}
+	case tabHistory:
+		if cur < len(m.lastHistory) {
+			h := m.lastHistory[cur]
+			m.detailTitle = "History  " + h.Key
+			m.detailBody = renderHistoryDetail(h)
+			m.detailOpen = true
+		}
+	}
+}
+
+func detailLine(label, value string) string {
+	return fmt.Sprintf("  %-14s  %s", render.ColorFaint(label), value)
+}
+
+func renderPartitionDetail(p aggregate.PartitionSummary) string {
+	lines := []string{
+		detailLine("nodes", fmt.Sprintf("%d total (%d idle, %d mixed, %d alloc, %d down/drain)",
+			p.TotalNodes, p.NodeCounts.Idle, p.NodeCounts.Mixed, p.NodeCounts.Alloc, p.NodeCounts.Down+p.NodeCounts.Drain)),
+		detailLine("cpus", fmt.Sprintf("%d alloc / %d total", p.AllocCPUs, p.TotalCPUs)),
+	}
+	if p.TotalGPUs > 0 {
+		gpu := fmt.Sprintf("%d / %d", p.AllocGPUs, p.TotalGPUs)
+		if p.GPUModel != "" {
+			gpu += " " + p.GPUModel
+		}
+		lines = append(lines, detailLine("gpus", gpu))
+	}
+	lines = append(lines, detailLine("memory", fmt.Sprintf("%s alloc / %s total", render.HumanMB(p.AllocMemMB), render.HumanMB(p.TotalMemMB))))
+	lines = append(lines, detailLine("jobs", fmt.Sprintf("%d running, %d pending", p.RunningJobs, p.PendingJobs)))
+	return strings.Join(lines, "\n")
+}
+
+func renderNodeDetail(n aggregate.NodeRow) string {
+	users := strings.Join(n.Users, ", ")
+	if users == "" {
+		users = "(none)"
+	}
+	lines := []string{
+		detailLine("partition", n.Partition),
+		detailLine("state", strings.Join(n.State, ", ")),
+		detailLine("cpus", fmt.Sprintf("%d alloc / %d idle / %d total", n.CPUsAlloc, n.CPUsIdle, n.CPUsTotal)),
+		detailLine("memory", fmt.Sprintf("%s used / %s total (%s free)", render.HumanMB(n.MemAllocMB), render.HumanMB(n.MemTotalMB), render.HumanMB(n.MemFreeMB))),
+	}
+	if n.GPUsTotal > 0 {
+		gpu := fmt.Sprintf("%d / %d", n.GPUsAlloc, n.GPUsTotal)
+		if n.GPUModel != "" {
+			gpu += " " + n.GPUModel
+		}
+		lines = append(lines, detailLine("gpus", gpu))
+	}
+	lines = append(lines, detailLine("users", users))
+	if n.Reason != "" {
+		lines = append(lines, detailLine("reason", n.Reason))
+	}
+	return strings.Join(lines, "\n")
+}
+
+func renderJobDetail(j aggregate.JobRow) string {
+	lines := []string{
+		detailLine("state", j.State),
+		detailLine("account", j.Account),
+		detailLine("partition", j.Partition),
+		detailLine("nodes", orDefault(j.Nodes, "(not yet allocated)")),
+		detailLine("cpus", fmt.Sprintf("%d", j.CPUs)),
+	}
+	if j.GPUs > 0 {
+		lines = append(lines, detailLine("gpus", fmt.Sprintf("%d", j.GPUs)))
+	}
+	lines = append(lines,
+		detailLine("memory", render.HumanMB(j.MemoryMB)),
+		detailLine("runtime", render.HumanDuration(j.Runtime)),
+		detailLine("time limit", render.HumanDuration(j.TimeLimit)),
+	)
+	return strings.Join(lines, "\n")
+}
+
+func renderUserDetail(u aggregate.UserRollup) string {
+	return strings.Join([]string{
+		detailLine("running", fmt.Sprintf("%d jobs", u.Running)),
+		detailLine("pending", fmt.Sprintf("%d jobs", u.Pending)),
+		detailLine("cpus held", fmt.Sprintf("%d", u.CPUsHeld)),
+		detailLine("gpus held", fmt.Sprintf("%d", u.GPUsHeld)),
+		detailLine("memory", render.HumanMB(u.MemoryMBHeld)),
+		detailLine("oldest run", render.HumanDuration(u.OldestRunAge)),
+	}, "\n")
+}
+
+func renderQueueDetail(q aggregate.QueueRow) string {
+	lines := []string{
+		detailLine("partition", q.Partition),
+		detailLine("priority", fmt.Sprintf("%d", q.Priority)),
+		detailLine("cpus", fmt.Sprintf("%d", q.CPUs)),
+	}
+	if q.GPUs > 0 {
+		lines = append(lines, detailLine("gpus", fmt.Sprintf("%d", q.GPUs)))
+	}
+	lines = append(lines,
+		detailLine("memory", render.HumanMB(q.MemoryMB)),
+		detailLine("time limit", render.HumanDuration(q.TimeLimit)),
+		detailLine("reason", q.Reason),
+		detailLine("explained", q.ReasonHuman),
+	)
+	if !q.SubmitTime.IsZero() {
+		lines = append(lines, detailLine("submitted", q.SubmitTime.Format("2006-01-02 15:04")+" ("+render.HumanDuration(q.SubmitAge)+" ago)"))
+	}
+	if !q.EligibleStart.IsZero() {
+		lines = append(lines, detailLine("eligible", q.EligibleStart.Format("2006-01-02 15:04")))
+	}
+	return strings.Join(lines, "\n")
+}
+
+func renderHistoryDetail(h aggregate.HistoryRow) string {
+	return strings.Join([]string{
+		detailLine("jobs", fmt.Sprintf("%d total", h.Jobs)),
+		detailLine("completed", fmt.Sprintf("%d", h.Completed)),
+		detailLine("failed", fmt.Sprintf("%d", h.Failed)),
+		detailLine("timeout", fmt.Sprintf("%d", h.Timeout)),
+		detailLine("cancelled", fmt.Sprintf("%d", h.Cancelled)),
+		detailLine("cpu-hours", fmt.Sprintf("%.1f", h.CPUHours)),
+		detailLine("gpu-hours", fmt.Sprintf("%.1f", h.GPUHours)),
+	}, "\n")
+}
+
 func (m *model) renderHelp(maxHeight int) string {
 	body := strings.Join([]string{
 		helpTitleStyle.Render("muster — keys"),
@@ -525,6 +730,7 @@ func (m *model) renderHelp(maxHeight int) string {
 		"  " + helpKeyStyle.Render("s") + "           cycle sort key (jobs, users, queue)",
 		"  " + helpKeyStyle.Render("/") + "           filter rows (name/user/reason)",
 		"  " + helpKeyStyle.Render("m") + "           toggle Me mode (your jobs only)",
+		"  " + helpKeyStyle.Render("enter") + "       open detail for the selected row",
 		"  " + helpKeyStyle.Render("↑ / ↓ / k / j") + "  move selection cursor",
 		"  " + helpKeyStyle.Render("g / G") + "       jump to first / last row",
 		"  " + helpKeyStyle.Render("pgup / pgdn") + " scroll one page",
@@ -621,6 +827,7 @@ func (m *model) renderTabBody() string {
 			}
 			rows = filtered
 		}
+		m.lastPartitions = rows
 		rowCount = len(rows)
 		render.RenderPartitions(&buf, rows)
 	case tabNodes:
@@ -635,6 +842,7 @@ func (m *model) renderTabBody() string {
 			}
 			filtered = append(filtered, r)
 		}
+		m.lastNodes = filtered
 		rowCount = len(filtered)
 		render.RenderNodes(&buf, filtered, false)
 	case tabJobs:
@@ -649,6 +857,7 @@ func (m *model) renderTabBody() string {
 			}
 			rows = filtered
 		}
+		m.lastJobs = rows
 		rowCount = len(rows)
 		render.RenderJobs(&buf, rows)
 	case tabUsers:
@@ -663,6 +872,7 @@ func (m *model) renderTabBody() string {
 			}
 			rows = filtered
 		}
+		m.lastUsers = rows
 		rowCount = len(rows)
 		render.RenderUsers(&buf, rows)
 	case tabQueue:
@@ -678,6 +888,7 @@ func (m *model) renderTabBody() string {
 			}
 			filtered = append(filtered, r)
 		}
+		m.lastQueue = filtered
 		rowCount = len(filtered)
 		render.RenderQueue(&buf, filtered)
 	case tabHistory:
@@ -692,6 +903,7 @@ func (m *model) renderTabBody() string {
 			}
 			filtered = append(filtered, r)
 		}
+		m.lastHistory = filtered
 		rowCount = len(filtered)
 		render.RenderHistory(&buf, filtered, "user")
 	}
