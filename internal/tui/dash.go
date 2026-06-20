@@ -178,15 +178,17 @@ func (m *model) View() string {
 	}
 
 	header := m.renderHeader()
+	summary := m.renderSummary(m.width)
 	footer := m.renderFooter()
 
-	contentHeight := m.height - lipgloss.Height(header) - lipgloss.Height(footer) - 1
+	used := lipgloss.Height(header) + lipgloss.Height(summary) + lipgloss.Height(footer) + 1
+	contentHeight := m.height - used
 	if contentHeight < 5 {
 		contentHeight = 5
 	}
 	content := m.renderTab(contentHeight)
 
-	return lipgloss.JoinVertical(lipgloss.Top, header, content, footer)
+	return lipgloss.JoinVertical(lipgloss.Top, header, summary, content, footer)
 }
 
 func (m *model) renderHeader() string {
