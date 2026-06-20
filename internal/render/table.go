@@ -496,8 +496,12 @@ func RenderQueue(w io.Writer, rows []aggregate.QueueRow) {
 		case "JobHeldUser", "JobHeldAdmin", "DependencyNeverSatisfied":
 			reason = ColorYellow(reason)
 		}
+		jobIDStr := fmt.Sprintf("%d", r.JobID)
+		if r.ArrayCount > 0 {
+			jobIDStr = fmt.Sprintf("%d_* (%d)", r.JobID, r.ArrayCount)
+		}
 		t.AppendRow(table.Row{
-			formatRowMarker(r.IsSelected, r.IsNew) + fmt.Sprintf("%d", r.JobID),
+			formatRowMarker(r.IsSelected, r.IsNew) + jobIDStr,
 			ColorCyan(r.User),
 			truncate(r.Name, 24),
 			r.CPUs,

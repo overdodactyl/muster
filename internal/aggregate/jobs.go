@@ -51,6 +51,9 @@ func Jobs(jobs []slurm.Job, partition, user string, includePending bool, sortBy 
 // JobsCollapsed is Jobs with control over array-job collapsing. When
 // expandArrays is true, each array task gets its own row; otherwise the
 // tasks are merged into a single summary row per array_job_id.
+//
+// To drill into a single array, pass expandArrays=true and filter the
+// caller's input to jobs whose ArrayJobID matches.
 func JobsCollapsed(jobs []slurm.Job, partition, user string, includePending, expandArrays bool, sortBy string, top int, now time.Time) []JobRow {
 	if now.IsZero() {
 		now = time.Now()

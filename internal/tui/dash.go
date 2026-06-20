@@ -170,6 +170,10 @@ type model struct {
 	// since both navigate job IDs). Cleared after a bulk operation.
 	selectedJobs map[int64]bool
 
+	// arrayDrill is non-zero when the user has pressed Enter on a collapsed
+	// array row; only that array's tasks are shown (expanded). Esc clears.
+	arrayDrill int64
+
 	loading   bool
 	lastErr   error
 	lastFetch time.Time
@@ -413,7 +417,15 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		switch msg.String() {
-		case "q", "ctrl+c", "esc":
+		case "q", "ctrl+c":
+			return m, tea.Quit
+		case "esc":
+			// Tiered: leave array-drill first, then quit if not drilling.
+			if m.arrayDrill != 0 {
+				m.arrayDrill = 0
+				m.viewport.GotoTop()
+				return m, nil
+			}
 			return m, tea.Quit
 		case "?":
 			m.showHelp = true
@@ -1263,10 +1275,32 @@ func (m *model) jumpToCurrentMatch() {
 
 // openDetail prepares the detail overlay for the current cursor row and
 // returns a tea.Cmd that fetches the job log tail (jobs/queue tabs only).
+//
+// Enter on a collapsed array row (ArrayCount>0) drills into the array
+// instead of opening detail — the user gets the per-task list; a second
+// Enter on a task then opens its detail.
 func (m *model) openDetail() tea.Cmd {
 	cur := m.cursor[m.tab]
 	if cur < 0 || cur >= m.rowCounts[m.tab] {
 		return nil
+	}
+
+	// Drill into array if the cursor row is a collapsed array.
+	if m.tab == tabJobs && cur < len(m.lastJobs) {
+		if r := m.lastJobs[cur]; r.ArrayCount > 0 {
+			m.arrayDrill = r.JobID
+			m.cursor[m.tab] = 0
+			m.viewport.GotoTop()
+			return nil
+		}
+	}
+	if m.tab == tabQueue && cur < len(m.lastQueue) {
+		if r := m.lastQueue[cur]; r.ArrayCount > 0 {
+			m.arrayDrill = r.JobID
+			m.cursor[m.tab] = 0
+			m.viewport.GotoTop()
+			return nil
+		}
 	}
 	m.detailJobID = 0
 	m.detailLogs = nil
@@ -1809,7 +1843,19 @@ func (m *model) renderTabBody() string {
 		render.RenderNodes(&buf, filtered, false)
 	case tabJobs:
 		sort := orDefault(m.currentSort(), "cpus")
-		rows := aggregate.Jobs(m.jobs, m.partition, me, false, sort, 0, time.Now())
+		jobs := m.jobs
+		expand := false
+		if m.arrayDrill != 0 {
+			expand = true
+			filtered := jobs[:0]
+			for _, j := range jobs {
+				if j.ArrayJobID == m.arrayDrill {
+					filtered = append(filtered, j)
+				}
+			}
+			jobs = filtered
+		}
+		rows := aggregate.JobsCollapsed(jobs, m.partition, me, false, expand, sort, 0, time.Now())
 		if f != "" {
 			filtered := rows[:0]
 			for _, r := range rows {
@@ -1862,7 +1908,19 @@ func (m *model) renderTabBody() string {
 		render.RenderAccounts(&buf, rows)
 	case tabQueue:
 		sort := orDefault(m.currentSort(), "priority")
-		rows := aggregate.Queue(m.jobs, m.partition, false, "", sort, time.Now())
+		queueJobs := m.jobs
+		expand := false
+		if m.arrayDrill != 0 {
+			expand = true
+			filtered := queueJobs[:0]
+			for _, j := range queueJobs {
+				if j.ArrayJobID == m.arrayDrill {
+					filtered = append(filtered, j)
+				}
+			}
+			queueJobs = filtered
+		}
+		rows := aggregate.QueueCollapsed(queueJobs, m.partition, false, expand, "", sort, time.Now())
 		filtered := rows[:0]
 		for _, r := range rows {
 			if me != "" && r.User != me {
@@ -1988,6 +2046,9 @@ func (m *model) renderFooter() string {
 		status = fmt.Sprintf("last update %s", m.lastFetch.Format("15:04:05"))
 	}
 	help := "? help · q · r refresh · tab · 1-7 · s sort · / filter · m me · space select · c cancel"
+	if m.arrayDrill != 0 {
+		help = "↩ array " + fmt.Sprintf("%d_*", m.arrayDrill) + " (esc back) · " + help
+	}
 	if m.meMode {
 		help += "  ·  " + render.ColorYellow("Me mode")
 	}
