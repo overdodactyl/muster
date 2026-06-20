@@ -51,6 +51,15 @@ type JobDetail struct {
 	Command                 string
 }
 
+// JobEfficiency is live CPU + memory utilization for a running job, queried
+// via `sstat`. Zero values mean the call returned nothing (job not stepping,
+// not running, or no permission).
+type JobEfficiency struct {
+	JobID    int64
+	AveCPU   time.Duration // wall-clock cumulative CPU time used (across tasks)
+	MaxRSSMB int           // peak resident set size in MB
+}
+
 type Partition struct {
 	Name    string
 	Nodes   []string

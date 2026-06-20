@@ -13,5 +13,6 @@ type Client interface {
 	Reservations(ctx context.Context) ([]Reservation, error)
 	Cancel(ctx context.Context, jobID int64) error
 	JobDetail(ctx context.Context, jobID int64) (JobDetail, error)
+	JobEfficiency(ctx context.Context, jobID int64) (JobEfficiency, error)
 	SlurmVersion(ctx context.Context) (string, error)
 }

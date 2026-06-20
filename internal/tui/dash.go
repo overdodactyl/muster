@@ -128,6 +128,7 @@ type model struct {
 	detailCommand  string   // job's command/script path
 	detailLogs     []string // captured stdout lines, refreshed each tick while open
 	detailLogErr   error
+	detailEff      slurm.JobEfficiency // live cpu/mem stats from sstat
 	detailViewport viewport.Model // scrollable log viewer (jobs/queue only)
 	detailVPReady  bool
 
@@ -521,9 +522,12 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.acctInFlight = true
 			cmds = append(cmds, m.fetchAcctCmd())
 		}
-		// If a job detail overlay is open, refresh its log tail too.
+		// If a job detail overlay is open, refresh its log tail + sstat too.
 		if m.detailOpen && m.detailJobID > 0 {
-			cmds = append(cmds, m.fetchLogTailCmd(m.detailJobID))
+			cmds = append(cmds,
+				m.fetchLogTailCmd(m.detailJobID),
+				m.fetchEfficiencyCmd(m.detailJobID),
+			)
 		}
 		return m, tea.Batch(cmds...)
 
@@ -557,6 +561,12 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.detailCWD = msg.cwd
 			m.detailCommand = msg.command
 			m.updateDetailViewportContent()
+		}
+		return m, nil
+
+	case effMsg:
+		if msg.jobID == m.detailJobID && m.detailOpen {
+			m.detailEff = msg.eff
 		}
 		return m, nil
 
@@ -598,6 +608,22 @@ type logTailMsg struct {
 	command string
 	lines   []string
 	err     error
+}
+
+type effMsg struct {
+	jobID int64
+	eff   slurm.JobEfficiency
+	err   error
+}
+
+func (m *model) fetchEfficiencyCmd(jobID int64) tea.Cmd {
+	c := m.client
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		e, err := c.JobEfficiency(ctx, jobID)
+		return effMsg{jobID: jobID, eff: e, err: err}
+	}
 }
 
 // detailLogMaxLines caps how many trailing lines we hold for the in-overlay
@@ -989,6 +1015,9 @@ func (m *model) renderDetailOverlay(maxHeight int) string {
 		helpTitleStyle.Render(m.detailTitle),
 		m.detailBody,
 	}
+	if effLine := m.formatEfficiencyLine(); effLine != "" {
+		headerLines = append(headerLines, effLine)
+	}
 	if m.detailCWD != "" {
 		headerLines = append(headerLines, detailLine("cwd", m.detailCWD))
 	}
@@ -1173,6 +1202,7 @@ func (m *model) openDetail() tea.Cmd {
 	m.detailLogPath = ""
 	m.detailCWD = ""
 	m.detailCommand = ""
+	m.detailEff = slurm.JobEfficiency{}
 
 	switch m.tab {
 	case tabPartitions:
@@ -1225,13 +1255,67 @@ func (m *model) openDetail() tea.Cmd {
 		}
 	}
 	if m.detailJobID > 0 {
-		return m.fetchLogTailCmd(m.detailJobID)
+		return tea.Batch(m.fetchLogTailCmd(m.detailJobID), m.fetchEfficiencyCmd(m.detailJobID))
 	}
 	return nil
 }
 
 func detailLine(label, value string) string {
 	return fmt.Sprintf("  %-14s  %s", render.ColorFaint(label), value)
+}
+
+// formatEfficiencyLine returns "  live cpu  3.2/8 cores (40%) · peak mem 6.4G"
+// when sstat returned useful data; empty otherwise (so the line is omitted).
+func (m *model) formatEfficiencyLine() string {
+	if m.detailJobID == 0 {
+		return ""
+	}
+	e := m.detailEff
+	if e.AveCPU == 0 && e.MaxRSSMB == 0 {
+		return ""
+	}
+	// Find the matching JobRow to learn alloc_cpus + runtime.
+	var allocCPU int
+	var runtime time.Duration
+	for _, j := range m.lastJobs {
+		if j.JobID == e.JobID {
+			allocCPU = j.CPUs
+			runtime = j.Runtime
+			break
+		}
+	}
+	if allocCPU == 0 || runtime <= 0 {
+		// Fall back to just printing raw numbers.
+		bits := []string{}
+		if e.AveCPU > 0 {
+			bits = append(bits, fmt.Sprintf("cpu time %s", render.HumanDuration(e.AveCPU)))
+		}
+		if e.MaxRSSMB > 0 {
+			bits = append(bits, fmt.Sprintf("peak mem %s", render.HumanMB(e.MaxRSSMB)))
+		}
+		if len(bits) == 0 {
+			return ""
+		}
+		return detailLine("live", strings.Join(bits, " · "))
+	}
+	cores := e.AveCPU.Seconds() / runtime.Seconds()
+	pctVal := int(cores / float64(allocCPU) * 100)
+	pctStr := fmt.Sprintf("%d%%", pctVal)
+	switch {
+	case pctVal >= 75:
+		pctStr = render.ColorGreen(pctStr)
+	case pctVal >= 25:
+		pctStr = render.ColorYellow(pctStr)
+	default:
+		pctStr = render.ColorRed(pctStr)
+	}
+	parts := []string{
+		fmt.Sprintf("%.1f / %d cores (%s)", cores, allocCPU, pctStr),
+	}
+	if e.MaxRSSMB > 0 {
+		parts = append(parts, "peak "+render.HumanMB(e.MaxRSSMB))
+	}
+	return detailLine("live", strings.Join(parts, " · "))
 }
 
 func renderPartitionDetail(p aggregate.PartitionSummary) string {
