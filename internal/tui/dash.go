@@ -133,6 +133,10 @@ type model struct {
 	detailViewport viewport.Model // scrollable log viewer (jobs/queue only)
 	detailVPReady  bool
 
+	// Per-detail CPU history: cleared on each new openDetail; updated when
+	// effMsg lands. Powers the live sparkline in the metadata block.
+	detailEffSeries []int
+
 	// In-log search (active only while the log viewer is open).
 	logSearch       string
 	logSearchMode   bool
@@ -575,6 +579,12 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case effMsg:
 		if msg.jobID == m.detailJobID && m.detailOpen {
 			m.detailEff = msg.eff
+			if pct, ok := m.cpuPercentFromEff(msg.eff); ok {
+				m.detailEffSeries = append(m.detailEffSeries, pct)
+				if len(m.detailEffSeries) > detailEffMaxSamples {
+					m.detailEffSeries = m.detailEffSeries[len(m.detailEffSeries)-detailEffMaxSamples:]
+				}
+			}
 		}
 		return m, nil
 
@@ -1226,6 +1236,7 @@ func (m *model) openDetail() tea.Cmd {
 	m.detailCWD = ""
 	m.detailCommand = ""
 	m.detailEff = slurm.JobEfficiency{}
+	m.detailEffSeries = nil
 
 	switch m.tab {
 	case tabPartitions:
@@ -1287,17 +1298,12 @@ func detailLine(label, value string) string {
 	return fmt.Sprintf("  %-14s  %s", render.ColorFaint(label), value)
 }
 
-// formatEfficiencyLine returns "  live cpu  3.2/8 cores (40%) · peak mem 6.4G"
-// when sstat returned useful data; empty otherwise (so the line is omitted).
-func (m *model) formatEfficiencyLine() string {
-	if m.detailJobID == 0 {
-		return ""
-	}
-	e := m.detailEff
-	if e.AveCPU == 0 && e.MaxRSSMB == 0 {
-		return ""
-	}
-	// Find the matching JobRow to learn alloc_cpus + runtime.
+const detailEffMaxSamples = 60 // 60 samples × 10s tick = 10 minutes of trend
+
+// cpuPercentFromEff turns a JobEfficiency snapshot into a 0-100 CPU%
+// (used / allocated) by finding the matching JobRow for alloc_cpus + runtime.
+// Returns ok=false if the math is undefined (zero runtime, missing job).
+func (m *model) cpuPercentFromEff(e slurm.JobEfficiency) (int, bool) {
 	var allocCPU int
 	var runtime time.Duration
 	for _, j := range m.lastJobs {
@@ -1307,8 +1313,32 @@ func (m *model) formatEfficiencyLine() string {
 			break
 		}
 	}
-	if allocCPU == 0 || runtime <= 0 {
-		// Fall back to just printing raw numbers.
+	if allocCPU == 0 || runtime <= 0 || e.AveCPU <= 0 {
+		return 0, false
+	}
+	cores := e.AveCPU.Seconds() / runtime.Seconds()
+	pct := int(cores / float64(allocCPU) * 100)
+	if pct < 0 {
+		pct = 0
+	}
+	if pct > 100 {
+		pct = 100
+	}
+	return pct, true
+}
+
+// formatEfficiencyLine returns the 'live' metadata row(s): current cores in
+// use + percent + a sparkline of recent CPU usage if we have enough samples.
+func (m *model) formatEfficiencyLine() string {
+	if m.detailJobID == 0 {
+		return ""
+	}
+	e := m.detailEff
+	if e.AveCPU == 0 && e.MaxRSSMB == 0 {
+		return ""
+	}
+	pct, ok := m.cpuPercentFromEff(e)
+	if !ok {
 		bits := []string{}
 		if e.AveCPU > 0 {
 			bits = append(bits, fmt.Sprintf("cpu time %s", render.HumanDuration(e.AveCPU)))
@@ -1321,13 +1351,23 @@ func (m *model) formatEfficiencyLine() string {
 		}
 		return detailLine("live", strings.Join(bits, " · "))
 	}
+	// Look up alloc again — we know it's non-zero from the ok branch above.
+	var allocCPU int
+	var runtime time.Duration
+	for _, j := range m.lastJobs {
+		if j.JobID == e.JobID {
+			allocCPU = j.CPUs
+			runtime = j.Runtime
+			break
+		}
+	}
 	cores := e.AveCPU.Seconds() / runtime.Seconds()
-	pctVal := int(cores / float64(allocCPU) * 100)
-	pctStr := fmt.Sprintf("%d%%", pctVal)
+
+	pctStr := fmt.Sprintf("%d%%", pct)
 	switch {
-	case pctVal >= 75:
+	case pct >= 75:
 		pctStr = render.ColorGreen(pctStr)
-	case pctVal >= 25:
+	case pct >= 25:
 		pctStr = render.ColorYellow(pctStr)
 	default:
 		pctStr = render.ColorRed(pctStr)
@@ -1337,6 +1377,10 @@ func (m *model) formatEfficiencyLine() string {
 	}
 	if e.MaxRSSMB > 0 {
 		parts = append(parts, "peak "+render.HumanMB(e.MaxRSSMB))
+	}
+	if len(m.detailEffSeries) > 1 {
+		spark := render.Sparkline(m.detailEffSeries, 24)
+		parts = append(parts, "trend "+spark)
 	}
 	return detailLine("live", strings.Join(parts, " · "))
 }
