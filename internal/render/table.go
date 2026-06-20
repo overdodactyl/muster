@@ -446,9 +446,12 @@ func RenderQueue(w io.Writer, rows []aggregate.QueueRow) {
 	t.Render()
 }
 
-func RenderHistory(w io.Writer, rows []aggregate.HistoryRow, keyHeader string) {
+func RenderHistory(w io.Writer, rows []aggregate.HistoryRow, keyHeader, subtitle string) {
 	if w == nil {
 		w = os.Stdout
+	}
+	if subtitle != "" {
+		fmt.Fprintln(w, ColorFaint(subtitle))
 	}
 	if len(rows) == 0 {
 		fmt.Fprintln(w, "no completed jobs in this window")

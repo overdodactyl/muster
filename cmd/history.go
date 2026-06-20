@@ -52,7 +52,12 @@ Long windows are slow - default is 24h.`,
 		if flagJSON {
 			return render.JSON(os.Stdout, rows)
 		}
-		render.RenderHistory(os.Stdout, rows, histBy)
+		subtitle := fmt.Sprintf("window: last %s · by %s", histSince, histBy)
+		if flagPartition != "" {
+			subtitle = "partition " + flagPartition + " · " + subtitle
+		}
+		subtitle += "   (sacct shows only jobs visible to you)"
+		render.RenderHistory(os.Stdout, rows, histBy, subtitle)
 		return nil
 	},
 }

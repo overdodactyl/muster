@@ -1634,7 +1634,15 @@ func (m *model) renderTabBody() string {
 		}
 		m.lastHistory = filtered
 		rowCount = len(filtered)
-		render.RenderHistory(&buf, filtered, "user")
+		subtitle := "window: last 24h"
+		if m.partition != "" {
+			subtitle = "partition " + m.partition + " · " + subtitle
+		}
+		if !m.lastFetch.IsZero() {
+			subtitle += " · fetched " + m.lastFetch.Format("15:04:05")
+		}
+		subtitle += "   (sacct shows only jobs visible to you)"
+		render.RenderHistory(&buf, filtered, "user", subtitle)
 	}
 
 	m.rowCounts[m.tab] = rowCount
