@@ -61,7 +61,7 @@ func Run(client slurm.Client, partition string) error {
 	}
 	p := tea.NewProgram(m,
 		tea.WithAltScreen(),
-		tea.WithMouseCellMotion(), // capture mouse so wheel scrolls the dash, not the terminal scrollback
+		tea.WithMouseAllMotion(), // capture mouse incl. wheel so scrolling stays inside the dash
 	)
 	_, err := p.Run()
 	return err
@@ -428,11 +428,17 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 
 	case tea.MouseMsg:
-		// Wheel events: delegate to viewport so the dash content scrolls
-		// instead of the terminal's scrollback buffer.
-		var cmd tea.Cmd
-		m.viewport, cmd = m.viewport.Update(msg)
-		return m, cmd
+		// Handle wheel directly: bubbles/viewport's internal handler only
+		// fires on Action==Press, but some terminals send wheel events with
+		// other actions (Motion, etc.). Routing wheel through ScrollUp/Down
+		// ourselves bypasses that restriction.
+		switch msg.Button {
+		case tea.MouseButtonWheelUp:
+			m.viewport.LineUp(3)
+		case tea.MouseButtonWheelDown:
+			m.viewport.LineDown(3)
+		}
+		return m, nil
 
 	case cancelResultMsg:
 		if msg.err != nil {
