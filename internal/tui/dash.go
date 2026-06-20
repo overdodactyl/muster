@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -37,10 +38,17 @@ var tabNames = []string{"Partitions", "Nodes", "Jobs", "Users", "Queue", "Histor
 
 // Run blocks until the user quits the TUI.
 func Run(client slurm.Client, partition string) error {
+	ti := textinput.New()
+	ti.Prompt = "/ "
+	ti.Placeholder = "filter (name, user, reason…)"
+	ti.CharLimit = 80
+	ti.Width = 40
+
 	m := &model{
-		client:    client,
-		partition: partition,
-		loading:   true,
+		client:      client,
+		partition:   partition,
+		loading:     true,
+		filterInput: ti,
 	}
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	_, err := p.Run()
@@ -64,6 +72,10 @@ type model struct {
 
 	sortIndex map[tabIdx]int
 	showHelp  bool
+
+	filter      string
+	filterMode  bool
+	filterInput textinput.Model
 
 	loading   bool
 	lastErr   error
@@ -172,6 +184,24 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
+		// Filter input swallows keys when active.
+		if m.filterMode {
+			switch msg.String() {
+			case "esc":
+				m.filterMode = false
+				m.filterInput.SetValue(m.filter)
+				m.filterInput.Blur()
+				return m, nil
+			case "enter":
+				m.filterMode = false
+				m.filter = strings.TrimSpace(m.filterInput.Value())
+				m.filterInput.Blur()
+				return m, nil
+			}
+			var cmd tea.Cmd
+			m.filterInput, cmd = m.filterInput.Update(msg)
+			return m, cmd
+		}
 		// Help overlay swallows any key (and dismisses on most keys).
 		if m.showHelp {
 			switch msg.String() {
@@ -191,6 +221,11 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.fetchCmd(true)
 		case "s":
 			m.cycleSort()
+		case "/":
+			m.filterMode = true
+			m.filterInput.SetValue(m.filter)
+			m.filterInput.Focus()
+			return m, textinput.Blink
 		case "tab", "right", "l":
 			m.tab = (m.tab + 1) % tabIdx(len(tabNames))
 		case "shift+tab", "left", "h":
@@ -267,6 +302,7 @@ func (m *model) renderHelp(maxHeight int) string {
 		helpSectionStyle.Render("Actions"),
 		"  " + helpKeyStyle.Render("r") + "           refresh now",
 		"  " + helpKeyStyle.Render("s") + "           cycle sort key (jobs, users, queue)",
+		"  " + helpKeyStyle.Render("/") + "           filter rows (name/user/reason)",
 		"  " + helpKeyStyle.Render("?") + "           toggle this help",
 		"",
 		helpSectionStyle.Render("Exit"),
@@ -316,27 +352,94 @@ func (m *model) renderHeader() string {
 
 func (m *model) renderTab(maxHeight int) string {
 	var buf bytes.Buffer
+	f := strings.ToLower(m.filter)
+	contains := func(parts ...string) bool {
+		if f == "" {
+			return true
+		}
+		for _, p := range parts {
+			if strings.Contains(strings.ToLower(p), f) {
+				return true
+			}
+		}
+		return false
+	}
+
 	switch m.tab {
 	case tabPartitions:
 		rows := aggregate.Partitions(m.nodes, m.jobs, m.partition)
+		if f != "" {
+			filtered := rows[:0]
+			for _, r := range rows {
+				if contains(r.Name) {
+					filtered = append(filtered, r)
+				}
+			}
+			rows = filtered
+		}
 		render.RenderPartitions(&buf, rows)
 	case tabNodes:
 		rows := aggregate.Nodes(m.nodes, m.jobs, m.partition, nil, false, false)
+		if f != "" {
+			filtered := rows[:0]
+			for _, r := range rows {
+				if contains(append([]string{r.Name}, r.Users...)...) {
+					filtered = append(filtered, r)
+				}
+			}
+			rows = filtered
+		}
 		render.RenderNodes(&buf, rows, false)
 	case tabJobs:
 		sort := orDefault(m.currentSort(), "cpus")
 		rows := aggregate.Jobs(m.jobs, m.partition, "", false, sort, 0, time.Now())
+		if f != "" {
+			filtered := rows[:0]
+			for _, r := range rows {
+				if contains(r.Name, r.User, r.Account, r.Nodes) {
+					filtered = append(filtered, r)
+				}
+			}
+			rows = filtered
+		}
 		render.RenderJobs(&buf, rows)
 	case tabUsers:
 		sort := orDefault(m.currentSort(), "cpus")
 		rows := aggregate.Users(m.jobs, m.partition, "", sort, 0, time.Now())
+		if f != "" {
+			filtered := rows[:0]
+			for _, r := range rows {
+				if contains(r.User) {
+					filtered = append(filtered, r)
+				}
+			}
+			rows = filtered
+		}
 		render.RenderUsers(&buf, rows)
 	case tabQueue:
 		sort := orDefault(m.currentSort(), "priority")
 		rows := aggregate.Queue(m.jobs, m.partition, false, "", sort, time.Now())
+		if f != "" {
+			filtered := rows[:0]
+			for _, r := range rows {
+				if contains(r.User, r.Name, r.Reason, r.ReasonHuman) {
+					filtered = append(filtered, r)
+				}
+			}
+			rows = filtered
+		}
 		render.RenderQueue(&buf, rows)
 	case tabHistory:
 		rows := aggregate.History(m.acct, "user", m.partition, nil)
+		if f != "" {
+			filtered := rows[:0]
+			for _, r := range rows {
+				if contains(r.Key) {
+					filtered = append(filtered, r)
+				}
+			}
+			rows = filtered
+		}
 		render.RenderHistory(&buf, rows, "user")
 	}
 	body := strings.TrimRight(buf.String(), "\n")
@@ -365,6 +468,11 @@ func clipHeight(s string, max int) string {
 }
 
 func (m *model) renderFooter() string {
+	if m.filterMode {
+		hint := footerStyle.Render(" enter apply · esc cancel")
+		return m.filterInput.View() + hint
+	}
+
 	status := "ready"
 	if m.loading {
 		status = "loading…"
@@ -373,7 +481,10 @@ func (m *model) renderFooter() string {
 	} else if !m.lastFetch.IsZero() {
 		status = fmt.Sprintf("last update %s", m.lastFetch.Format("15:04:05"))
 	}
-	help := "? help · q quit · r refresh · tab switch · s sort"
+	help := "? help · q quit · r refresh · tab switch · s sort · / filter"
+	if m.filter != "" {
+		help += "  ·  " + render.ColorYellow("filter: "+m.filter)
+	}
 	left := footerStyle.Render(help)
 
 	if sort := m.currentSort(); sort != "" {
