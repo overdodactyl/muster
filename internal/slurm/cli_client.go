@@ -153,21 +153,52 @@ func (c *cliClient) JobEfficiency(ctx context.Context, jobID int64) (JobEfficien
 	}, nil
 }
 
-// JobGPUUtil runs nvidia-smi inside the running job's allocation via
-// 'srun --jobid=<id> --overlap'. Returns per-GPU compute and memory stats.
-// On clusters without nvidia GPUs (or where srun --overlap is restricted)
-// it returns an empty slice and a nil error so the UI just skips the line.
+// JobGPUUtil SSHes to the job's first allocated node and runs nvidia-smi,
+// then filters the per-GPU results to just the indices Slurm assigned to
+// this job (from gres_detail). srun --overlap was the obvious first choice
+// but it hangs on most cgroup-bound jobs because the new step can't satisfy
+// the parent allocation's CPU-bind; SSH-to-node sidesteps that entirely.
+//
+// Returns nil samples (no error) for non-running jobs, multi-node setups
+// where SSH would need to fan out, missing nvidia-smi, or denied SSH —
+// the dash just skips the line in those cases.
 func (c *cliClient) JobGPUUtil(ctx context.Context, jobID int64) ([]GPUUtil, error) {
-	out, err := c.run(ctx, "srun",
-		fmt.Sprintf("--jobid=%d", jobID),
-		"--overlap",
-		"--quiet",
+	d, err := c.JobDetail(ctx, jobID)
+	if err != nil {
+		return nil, nil
+	}
+	if d.State != "RUNNING" || d.Nodes == "" {
+		return nil, nil
+	}
+	nodes, err := ExpandHostlist(d.Nodes)
+	if err != nil || len(nodes) == 0 {
+		return nil, nil
+	}
+
+	// Which GPU indices does Slurm say this job holds on the first node?
+	// Used to filter nvidia-smi's output (which sees all GPUs on the box).
+	assigned := map[int]bool{}
+	for _, detail := range d.GRESDetail {
+		for _, g := range ParseGRES(detail) {
+			if g.Kind != "gpu" {
+				continue
+			}
+			for _, idx := range g.Index {
+				assigned[idx] = true
+			}
+		}
+	}
+
+	out, err := c.run(ctx, "ssh",
+		"-o", "BatchMode=yes",
+		"-o", "ConnectTimeout=3",
+		"-o", "LogLevel=ERROR",
+		nodes[0],
 		"nvidia-smi",
 		"--query-gpu=index,utilization.gpu,memory.used,memory.total",
 		"--format=csv,noheader,nounits",
 	)
 	if err != nil {
-		// Non-GPU jobs / srun denied / nvidia-smi missing → no stats.
 		return nil, nil
 	}
 	var samples []GPUUtil
@@ -181,6 +212,9 @@ func (c *cliClient) JobGPUUtil(ctx context.Context, jobID int64) ([]GPUUtil, err
 		used, e3 := strconv.Atoi(strings.TrimSpace(fields[2]))
 		total, e4 := strconv.Atoi(strings.TrimSpace(fields[3]))
 		if e1 != nil || e2 != nil || e3 != nil || e4 != nil {
+			continue
+		}
+		if len(assigned) > 0 && !assigned[idx] {
 			continue
 		}
 		samples = append(samples, GPUUtil{
