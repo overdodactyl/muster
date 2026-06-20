@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/fatih/color"
@@ -41,7 +40,8 @@ func init() {
 
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, "error:", err)
+		// Cobra already printed "Error: ..." to stderr; just propagate the
+		// exit code.
 		os.Exit(1)
 	}
 }
