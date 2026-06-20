@@ -209,22 +209,26 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
-		// Filter input swallows keys when active.
+		// Filter input swallows keys when active. Filter is applied live as
+		// the user types; Enter just exits the input (filter stays), Esc
+		// clears the filter and exits.
 		if m.filterMode {
 			switch msg.String() {
 			case "esc":
-				m.filterMode = false
-				m.filterInput.SetValue(m.filter)
+				m.filter = ""
+				m.filterInput.SetValue("")
 				m.filterInput.Blur()
+				m.filterMode = false
 				return m, nil
 			case "enter":
 				m.filterMode = false
-				m.filter = strings.TrimSpace(m.filterInput.Value())
 				m.filterInput.Blur()
 				return m, nil
 			}
 			var cmd tea.Cmd
 			m.filterInput, cmd = m.filterInput.Update(msg)
+			m.filter = strings.TrimSpace(m.filterInput.Value())
+			m.viewport.GotoTop()
 			return m, cmd
 		}
 		// Help overlay swallows any key (and dismisses on most keys).
@@ -605,7 +609,7 @@ func orDefault(s, def string) string {
 
 func (m *model) renderFooter() string {
 	if m.filterMode {
-		hint := footerStyle.Render(" enter apply · esc cancel")
+		hint := footerStyle.Render(" enter done · esc clear")
 		return m.filterInput.View() + hint
 	}
 
