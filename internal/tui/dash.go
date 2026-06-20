@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -76,6 +77,9 @@ type model struct {
 	filter      string
 	filterMode  bool
 	filterInput textinput.Model
+
+	viewport      viewport.Model
+	viewportReady bool
 
 	loading   bool
 	lastErr   error
@@ -181,6 +185,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		m.resizeViewport()
 		return m, nil
 
 	case tea.KeyMsg:
@@ -228,21 +233,33 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, textinput.Blink
 		case "tab", "right", "l":
 			m.tab = (m.tab + 1) % tabIdx(len(tabNames))
+			m.viewport.GotoTop()
 		case "shift+tab", "left", "h":
 			m.tab = (m.tab - 1 + tabIdx(len(tabNames))) % tabIdx(len(tabNames))
+			m.viewport.GotoTop()
 		case "1":
 			m.tab = tabPartitions
+			m.viewport.GotoTop()
 		case "2":
 			m.tab = tabNodes
+			m.viewport.GotoTop()
 		case "3":
 			m.tab = tabJobs
+			m.viewport.GotoTop()
 		case "4":
 			m.tab = tabUsers
+			m.viewport.GotoTop()
 		case "5":
 			m.tab = tabQueue
+			m.viewport.GotoTop()
 		case "6":
 			m.tab = tabHistory
+			m.viewport.GotoTop()
 		}
+		// Delegate remaining keys (j/k/up/down/pgup/pgdn/home/end) to viewport.
+		var cmd tea.Cmd
+		m.viewport, cmd = m.viewport.Update(msg)
+		return m, cmd
 
 	case dataMsg:
 		m.nodes = msg.nodes
@@ -284,10 +301,34 @@ func (m *model) View() string {
 	if m.showHelp {
 		content = m.renderHelp(contentHeight)
 	} else {
-		content = m.renderTab(contentHeight)
+		body := m.renderTabBody()
+		m.viewport.Width = m.width
+		m.viewport.Height = contentHeight
+		m.viewport.SetContent(body)
+		content = m.viewport.View()
+		if !m.viewport.AtBottom() || m.viewport.YOffset > 0 {
+			content = lipgloss.JoinVertical(lipgloss.Left, content, m.scrollHint())
+		}
 	}
 
 	return lipgloss.JoinVertical(lipgloss.Top, header, summary, content, footer)
+}
+
+func (m *model) scrollHint() string {
+	total := m.viewport.TotalLineCount()
+	visible := m.viewport.VisibleLineCount()
+	bottomLine := m.viewport.YOffset + visible
+	if bottomLine > total {
+		bottomLine = total
+	}
+	return render.ColorFaint(fmt.Sprintf("↑/↓ to scroll · lines %d-%d of %d", m.viewport.YOffset+1, bottomLine, total))
+}
+
+func (m *model) resizeViewport() {
+	if !m.viewportReady {
+		m.viewport = viewport.New(m.width, 10)
+		m.viewportReady = true
+	}
 }
 
 func (m *model) renderHelp(maxHeight int) string {
@@ -303,6 +344,8 @@ func (m *model) renderHelp(maxHeight int) string {
 		"  " + helpKeyStyle.Render("r") + "           refresh now",
 		"  " + helpKeyStyle.Render("s") + "           cycle sort key (jobs, users, queue)",
 		"  " + helpKeyStyle.Render("/") + "           filter rows (name/user/reason)",
+		"  " + helpKeyStyle.Render("↑ / ↓ / k / j") + "  scroll one line",
+		"  " + helpKeyStyle.Render("pgup / pgdn") + " scroll one page",
 		"  " + helpKeyStyle.Render("?") + "           toggle this help",
 		"",
 		helpSectionStyle.Render("Exit"),
@@ -350,7 +393,9 @@ func (m *model) renderHeader() string {
 	return lipgloss.JoinHorizontal(lipgloss.Bottom, title, " ", bar)
 }
 
-func (m *model) renderTab(maxHeight int) string {
+// renderTabBody produces the full unscrolled table for the active tab.
+// The caller wraps this in a viewport for scrolling.
+func (m *model) renderTabBody() string {
 	var buf bytes.Buffer
 	f := strings.ToLower(m.filter)
 	contains := func(parts ...string) bool {
@@ -443,7 +488,6 @@ func (m *model) renderTab(maxHeight int) string {
 		render.RenderHistory(&buf, rows, "user")
 	}
 	body := strings.TrimRight(buf.String(), "\n")
-	body = clipHeight(body, maxHeight)
 	return contentStyle.Render(body)
 }
 
@@ -454,18 +498,6 @@ func orDefault(s, def string) string {
 	return s
 }
 
-func clipHeight(s string, max int) string {
-	if max <= 0 {
-		return ""
-	}
-	lines := strings.Split(s, "\n")
-	if len(lines) <= max {
-		return s
-	}
-	clipped := strings.Join(lines[:max-1], "\n")
-	hidden := len(lines) - (max - 1)
-	return clipped + "\n" + lipgloss.NewStyle().Faint(true).Render(fmt.Sprintf("…+%d more lines", hidden))
-}
 
 func (m *model) renderFooter() string {
 	if m.filterMode {
