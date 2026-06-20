@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/olekukonko/tablewriter"
 
@@ -83,4 +84,64 @@ func RenderPartitions(w io.Writer, rows []aggregate.PartitionSummary) {
 	}
 	t.Render()
 	fmt.Fprintln(w, "Legend: I=idle  M=mixed  A=alloc  D=down/drain   CPUS A/T=allocated/total  MEM A/T=allocated/total")
+}
+
+func RenderNodes(w io.Writer, rows []aggregate.NodeRow, showJobs bool) {
+	if w == nil {
+		w = os.Stdout
+	}
+	if len(rows) == 0 {
+		fmt.Fprintln(w, "no nodes matched")
+		return
+	}
+	headers := []string{"NODE", "PART", "STATE", "CPUS A/I/T", "MEM USED/T", "GPU A/T", "USERS"}
+	t := newTable(w, headers)
+	for _, r := range rows {
+		gpu := "-"
+		if r.GPUsTotal > 0 {
+			model := ""
+			if r.GPUModel != "" {
+				model = " " + r.GPUModel
+			}
+			gpu = fmt.Sprintf("%d/%d%s", r.GPUsAlloc, r.GPUsTotal, model)
+			if r.GPUsAlloc == 0 {
+				gpu = ColorGreen(gpu)
+			} else if r.GPUsAlloc >= r.GPUsTotal {
+				gpu = ColorRed(gpu)
+			} else {
+				gpu = ColorYellow(gpu)
+			}
+		}
+		users := "-"
+		if showJobs && len(r.UserJobs) > 0 {
+			users = JoinList(r.UserJobs, 6)
+		} else if len(r.Users) > 0 {
+			coloured := make([]string, 0, len(r.Users))
+			for _, u := range r.Users {
+				coloured = append(coloured, ColorCyan(u))
+			}
+			users = JoinList(coloured, 6)
+		}
+		t.Append([]string{
+			ColorCyan(r.Name),
+			r.Partition,
+			ColorState(r.StateClass),
+			fmt.Sprintf("%d/%d/%d", r.CPUsAlloc, r.CPUsIdle, r.CPUsTotal),
+			fmt.Sprintf("%s/%s", HumanMB(r.MemAllocMB), HumanMB(r.MemTotalMB)),
+			gpu,
+			users,
+		})
+	}
+	t.Render()
+}
+
+// JoinList truncates a string slice for fixed-width display.
+func JoinList(items []string, max int) string {
+	if len(items) == 0 {
+		return "-"
+	}
+	if max <= 0 || len(items) <= max {
+		return strings.Join(items, ", ")
+	}
+	return strings.Join(items[:max], ", ") + fmt.Sprintf(", +%d more", len(items)-max)
 }
