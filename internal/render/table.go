@@ -189,6 +189,46 @@ func RenderUsers(w io.Writer, rows []aggregate.UserRollup) {
 	t.Render()
 }
 
+func RenderJobs(w io.Writer, rows []aggregate.JobRow) {
+	if w == nil {
+		w = os.Stdout
+	}
+	if len(rows) == 0 {
+		fmt.Fprintln(w, "no jobs matched")
+		return
+	}
+	t := newTable(w, []string{"JOBID", "USER", "NAME", "PART", "ST", "NODES", "CPU", "GPU", "MEM", "RUNTIME"})
+	for _, r := range rows {
+		gpu := ColorFaint("-")
+		if r.GPUs > 0 {
+			gpu = fmt.Sprintf("%d", r.GPUs)
+		}
+		state := r.State
+		if r.State == "PENDING" {
+			state = ColorYellow("PD")
+		} else if r.State == "RUNNING" {
+			state = ColorGreen("R")
+		}
+		nodes := r.Nodes
+		if nodes == "" {
+			nodes = ColorFaint("-")
+		}
+		t.AppendRow(table.Row{
+			r.JobID,
+			ColorCyan(r.User),
+			truncate(r.Name, 28),
+			r.Partition,
+			state,
+			truncate(nodes, 30),
+			r.CPUs,
+			gpu,
+			HumanMB(r.MemoryMB),
+			HumanDuration(r.Runtime),
+		})
+	}
+	t.Render()
+}
+
 func RenderQueue(w io.Writer, rows []aggregate.QueueRow) {
 	if w == nil {
 		w = os.Stdout
@@ -269,6 +309,18 @@ func JoinList(items []string, max int) string {
 		return strings.Join(items, ", ")
 	}
 	return strings.Join(items[:max], ", ") + fmt.Sprintf(", +%d more", len(items)-max)
+}
+
+// truncate shortens s to at most n runes, appending an ellipsis when cut.
+func truncate(s string, n int) string {
+	if n <= 1 || len(s) <= n {
+		return s
+	}
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[:n-1]) + "…"
 }
 
 // maxLen returns the longest string length in the slice.
