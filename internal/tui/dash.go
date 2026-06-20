@@ -2093,19 +2093,19 @@ func (m *model) renderTabBody() string {
 
 	body := strings.TrimRight(buf.String(), "\n")
 	if rowCount > 0 {
-		body = highlightDataRow(body, m.cursor[m.tab])
+		body = highlightDataRow(body, m.cursor[m.tab], m.filter)
 	}
 	return body
 }
 
 // highlightDataRow draws a soft-background tint plus a leading ▶ marker on
-// the Nth data row of a go-pretty rendered table (k9s / lazygit pattern).
-// All other lines get a leading space so the table stays horizontally aligned
-// across the cursor and non-cursor rows.
+// the Nth data row of a go-pretty rendered table (k9s / lazygit pattern),
+// and (when filter != "") wraps occurrences of the filter substring in a
+// yellow background inside each data row.
 //
 // Header is the first `│`-bearing line; border lines (╭ ├ ╰) lack `│` and are
 // shifted right by a space too.
-func highlightDataRow(body string, rowIdx int) string {
+func highlightDataRow(body string, rowIdx int, filter string) string {
 	lines := strings.Split(body, "\n")
 	dataIdx := -1
 	for i, line := range lines {
@@ -2118,6 +2118,9 @@ func highlightDataRow(body string, rowIdx int) string {
 			dataIdx = 0
 			continue
 		}
+		if filter != "" {
+			line = highlightFilterMatches(line, filter)
+		}
 		if dataIdx == rowIdx {
 			lines[i] = tintRow(cursorMarker + line)
 		} else {
@@ -2126,6 +2129,58 @@ func highlightDataRow(body string, rowIdx int) string {
 		dataIdx++
 	}
 	return strings.Join(lines, "\n")
+}
+
+// highlightFilterMatches wraps every case-insensitive occurrence of needle in
+// the line with a bold black-on-yellow ANSI envelope. Skips over existing
+// ANSI escape sequences so we don't corrupt color codes that happen to
+// contain matching characters.
+func highlightFilterMatches(line, needle string) string {
+	if needle == "" {
+		return line
+	}
+	const onLeft = "\x1b[1;43;30m"
+	const onRight = "\x1b[0m"
+	nlen := len(needle)
+	var b strings.Builder
+	i := 0
+	for i < len(line) {
+		if line[i] == 0x1b {
+			j := i + 1
+			if j < len(line) && line[j] == '[' {
+				j++
+				for j < len(line) {
+					c := line[j]
+					j++
+					if c >= '@' && c <= '~' {
+						break
+					}
+				}
+			}
+			b.WriteString(line[i:j])
+			i = j
+			continue
+		}
+		if i+nlen <= len(line) && !containsByte(line[i:i+nlen], 0x1b) && strings.EqualFold(line[i:i+nlen], needle) {
+			b.WriteString(onLeft)
+			b.WriteString(line[i : i+nlen])
+			b.WriteString(onRight)
+			i += nlen
+			continue
+		}
+		b.WriteByte(line[i])
+		i++
+	}
+	return b.String()
+}
+
+func containsByte(s string, b byte) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] == b {
+			return true
+		}
+	}
+	return false
 }
 
 // tintRow wraps a line in a soft background color and re-applies the bg after
