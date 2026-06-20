@@ -98,3 +98,21 @@ type tresItem struct {
 	Name  string   `json:"name"`
 	Count slurmNum `json:"count"`
 }
+
+// scontrol show reservation --json
+type scontrolReservationWire struct {
+	Reservations []scontrolReservation `json:"reservations"`
+}
+
+type scontrolReservation struct {
+	Name      string   `json:"name"`
+	NodeList  string   `json:"node_list"`
+	NodeCount int      `json:"node_count"`
+	Partition string   `json:"partition"`
+	StartTime slurmNum `json:"start_time"`
+	EndTime   slurmNum `json:"end_time"`
+	Users     string   `json:"users"`
+	Accounts  string   `json:"accounts"`
+	Flags     []string `json:"flags"`
+	TRES      string   `json:"tres"`
+}

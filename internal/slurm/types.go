@@ -46,6 +46,19 @@ type Partition struct {
 	State   string
 }
 
+type Reservation struct {
+	Name      string
+	Nodes     string
+	NodeCount int
+	Partition string
+	StartTime time.Time
+	EndTime   time.Time
+	Users     string
+	Accounts  string
+	Flags     []string
+	TRES      string
+}
+
 type AcctJob struct {
 	ID         int64
 	User       string

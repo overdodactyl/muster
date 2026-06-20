@@ -189,6 +189,64 @@ func RenderUsers(w io.Writer, rows []aggregate.UserRollup) {
 	t.Render()
 }
 
+func RenderReservations(w io.Writer, rows []aggregate.ReservationRow) {
+	if w == nil {
+		w = os.Stdout
+	}
+	if len(rows) == 0 {
+		fmt.Fprintln(w, "no reservations")
+		return
+	}
+	t := newTable(w, []string{"NAME", "STATE", "USERS", "PARTITION", "NODES", "WINDOW", "TIMING"})
+	for _, r := range rows {
+		state := r.State
+		switch r.State {
+		case "active":
+			state = ColorGreen(state)
+		case "upcoming":
+			state = ColorYellow(state)
+		case "ended":
+			state = ColorFaint(state)
+		}
+		window := "-"
+		if !r.StartTime.IsZero() {
+			window = r.StartTime.Format("Jan 02 15:04") + " → "
+			if !r.EndTime.IsZero() {
+				window += r.EndTime.Format("Jan 02 15:04")
+			} else {
+				window += "∞"
+			}
+		}
+		timing := "-"
+		switch r.State {
+		case "active":
+			if r.EndsIn > 0 {
+				timing = "ends in " + HumanDuration(r.EndsIn)
+			}
+		case "upcoming":
+			timing = "starts in " + HumanDuration(r.StartsIn)
+		}
+		users := r.Users
+		if users == "" {
+			users = ColorFaint("-")
+		}
+		part := r.Partition
+		if part == "" {
+			part = ColorFaint("any")
+		}
+		t.AppendRow(table.Row{
+			ColorCyan(r.Name),
+			state,
+			users,
+			part,
+			truncate(r.Nodes, 30),
+			window,
+			timing,
+		})
+	}
+	t.Render()
+}
+
 func RenderJobs(w io.Writer, rows []aggregate.JobRow) {
 	if w == nil {
 		w = os.Stdout

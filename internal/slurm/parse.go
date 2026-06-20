@@ -106,6 +106,29 @@ func parseSqueueJobs(b []byte) ([]Job, error) {
 	return out, nil
 }
 
+func parseScontrolReservations(b []byte) ([]Reservation, error) {
+	var w scontrolReservationWire
+	if err := decodeJSON(b, &w); err != nil {
+		return nil, err
+	}
+	out := make([]Reservation, 0, len(w.Reservations))
+	for _, r := range w.Reservations {
+		out = append(out, Reservation{
+			Name:      r.Name,
+			Nodes:     r.NodeList,
+			NodeCount: r.NodeCount,
+			Partition: r.Partition,
+			StartTime: r.StartTime.Time(),
+			EndTime:   r.EndTime.Time(),
+			Users:     r.Users,
+			Accounts:  r.Accounts,
+			Flags:     r.Flags,
+			TRES:      r.TRES,
+		})
+	}
+	return out, nil
+}
+
 func parseSacctJobs(b []byte) ([]AcctJob, error) {
 	var w sacctWire
 	if err := decodeJSON(b, &w); err != nil {

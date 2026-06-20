@@ -78,6 +78,14 @@ func (c *cliClient) Partitions(ctx context.Context) ([]Partition, error) {
 	return parseScontrolPartitions(out)
 }
 
+func (c *cliClient) Reservations(ctx context.Context) ([]Reservation, error) {
+	out, err := c.run(ctx, c.scontrol, "show", "reservation", "--json")
+	if err != nil {
+		return nil, err
+	}
+	return parseScontrolReservations(out)
+}
+
 func (c *cliClient) Accounting(ctx context.Context, since time.Duration, partition string) ([]AcctJob, error) {
 	if since <= 0 {
 		since = 24 * time.Hour
