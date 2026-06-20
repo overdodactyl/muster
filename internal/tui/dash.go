@@ -446,6 +446,9 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "m":
 			m.meMode = !m.meMode
 			m.viewport.GotoTop()
+		case "p", "P":
+			m.cyclePartition(msg.String() == "P")
+			return m, nil
 		case "j", "down":
 			m.moveCursor(1)
 			return m, nil
@@ -949,6 +952,37 @@ func (m *model) switchTab(t tabIdx) tea.Cmd {
 		return m.fetchAcctCmd()
 	}
 	return nil
+}
+
+// cyclePartition rotates m.partition through the known partitions plus the
+// 'all partitions' / cluster-mode pseudo-value (""). reverse=true goes
+// backward. Sparkline history is reset since it was keyed to the previous
+// scope.
+func (m *model) cyclePartition(reverse bool) {
+	// Build a stable list: "" first, then each partition we know about.
+	names := []string{""}
+	for _, p := range m.lastPartitions {
+		names = append(names, p.Name)
+	}
+	if len(names) <= 1 {
+		return
+	}
+	idx := 0
+	for i, n := range names {
+		if n == m.partition {
+			idx = i
+			break
+		}
+	}
+	if reverse {
+		idx = (idx - 1 + len(names)) % len(names)
+	} else {
+		idx = (idx + 1) % len(names)
+	}
+	m.partition = names[idx]
+	m.history = nil
+	m.viewport.GotoTop()
+	m.clampCursor()
 }
 
 func (m *model) moveCursor(delta int) {
@@ -1772,6 +1806,7 @@ func (m *model) renderHelp(maxHeight int) string {
 		"  " + helpKeyStyle.Render("s") + "           cycle sort key (jobs, users, queue)",
 		"  " + helpKeyStyle.Render("/") + "           filter rows (name/user/reason)",
 		"  " + helpKeyStyle.Render("m") + "           toggle Me mode (your jobs only)",
+		"  " + helpKeyStyle.Render("p / P") + "       cycle partition focus (forward / back)",
 		"  " + helpKeyStyle.Render("enter") + "       open detail for the selected row",
 		"  " + helpKeyStyle.Render("space") + "       toggle row selection (jobs/queue)",
 		"  " + helpKeyStyle.Render("c") + "           cancel cursor row OR all selected (own only)",
@@ -2129,7 +2164,7 @@ func (m *model) renderFooter() string {
 	} else if !m.lastFetch.IsZero() {
 		status = fmt.Sprintf("last update %s", m.lastFetch.Format("15:04:05"))
 	}
-	help := "? help · q · r refresh · tab · 1-7 · s sort · / filter · m me · space select · c cancel"
+	help := "? help · q · r refresh · tab · 1-7 · s sort · / filter · m me · p partition · space select · c cancel"
 	if m.arrayDrill != 0 {
 		help = "↩ array " + fmt.Sprintf("%d_*", m.arrayDrill) + " (esc back) · " + help
 	}
