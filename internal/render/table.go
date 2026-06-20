@@ -237,9 +237,9 @@ func RenderQueue(w io.Writer, rows []aggregate.QueueRow) {
 		fmt.Fprintln(w, "no queued jobs matched")
 		return
 	}
-	t := newTable(w, []string{"JOBID", "USER", "CPU", "GPU", "MEM", "PRI", "REASON", "EXPLANATION"})
+	t := newTable(w, []string{"JOBID", "USER", "NAME", "CPU", "GPU", "MEM", "PRI", "REASON", "EXPLANATION"})
 	for _, r := range rows {
-		gpu := "0"
+		gpu := ColorFaint("-")
 		if r.GPUs > 0 {
 			gpu = fmt.Sprintf("%d", r.GPUs)
 		}
@@ -254,6 +254,7 @@ func RenderQueue(w io.Writer, rows []aggregate.QueueRow) {
 		t.AppendRow(table.Row{
 			r.JobID,
 			ColorCyan(r.User),
+			truncate(r.Name, 24),
 			r.CPUs,
 			gpu,
 			HumanMB(r.MemoryMB),

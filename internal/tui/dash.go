@@ -27,12 +27,13 @@ type tabIdx int
 const (
 	tabPartitions tabIdx = iota
 	tabNodes
+	tabJobs
 	tabUsers
 	tabQueue
 	tabHistory
 )
 
-var tabNames = []string{"Partitions", "Nodes", "Users", "Queue", "History"}
+var tabNames = []string{"Partitions", "Nodes", "Jobs", "Users", "Queue", "History"}
 
 // Run blocks until the user quits the TUI.
 func Run(client slurm.Client, partition string) error {
@@ -142,10 +143,12 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "2":
 			m.tab = tabNodes
 		case "3":
-			m.tab = tabUsers
+			m.tab = tabJobs
 		case "4":
-			m.tab = tabQueue
+			m.tab = tabUsers
 		case "5":
+			m.tab = tabQueue
+		case "6":
 			m.tab = tabHistory
 		}
 
@@ -214,6 +217,9 @@ func (m *model) renderTab(maxHeight int) string {
 	case tabNodes:
 		rows := aggregate.Nodes(m.nodes, m.jobs, m.partition, nil, false, false)
 		render.RenderNodes(&buf, rows, false)
+	case tabJobs:
+		rows := aggregate.Jobs(m.jobs, m.partition, "", false, "cpus", 0, time.Now())
+		render.RenderJobs(&buf, rows)
 	case tabUsers:
 		rows := aggregate.Users(m.jobs, m.partition, "", "cpus", 0, time.Now())
 		render.RenderUsers(&buf, rows)
@@ -251,7 +257,7 @@ func (m *model) renderFooter() string {
 	} else if !m.lastFetch.IsZero() {
 		status = fmt.Sprintf("last update %s", m.lastFetch.Format("15:04:05"))
 	}
-	help := "q quit · r refresh · tab/⇧tab switch · 1-5 jump"
+	help := "q quit · r refresh · tab/⇧tab switch · 1-6 jump"
 	left := footerStyle.Render(help)
 	right := footerStyle.Render(status)
 
