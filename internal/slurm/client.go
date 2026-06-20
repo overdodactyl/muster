@@ -11,5 +11,6 @@ type Client interface {
 	Partitions(ctx context.Context) ([]Partition, error)
 	Accounting(ctx context.Context, since time.Duration, partition string) ([]AcctJob, error)
 	Reservations(ctx context.Context) ([]Reservation, error)
+	Cancel(ctx context.Context, jobID int64) error
 	SlurmVersion(ctx context.Context) (string, error)
 }

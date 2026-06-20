@@ -10,8 +10,8 @@ import (
 )
 
 type cliClient struct {
-	sinfo, squeue, scontrol, sacct string
-	timeout                        time.Duration
+	sinfo, squeue, scontrol, sacct, scancel string
+	timeout                                 time.Duration
 }
 
 func NewCLIClient() Client {
@@ -20,6 +20,7 @@ func NewCLIClient() Client {
 		squeue:   "squeue",
 		scontrol: "scontrol",
 		sacct:    "sacct",
+		scancel:  "scancel",
 		timeout:  30 * time.Second,
 	}
 }
@@ -76,6 +77,11 @@ func (c *cliClient) Partitions(ctx context.Context) ([]Partition, error) {
 		return nil, err
 	}
 	return parseScontrolPartitions(out)
+}
+
+func (c *cliClient) Cancel(ctx context.Context, jobID int64) error {
+	_, err := c.run(ctx, c.scancel, fmt.Sprintf("%d", jobID))
+	return err
 }
 
 func (c *cliClient) Reservations(ctx context.Context) ([]Reservation, error) {

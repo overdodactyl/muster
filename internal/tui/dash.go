@@ -112,6 +112,14 @@ type model struct {
 	detailTitle string
 	detailBody  string
 
+	confirmCancelID    int64
+	confirmCancelName  string
+	confirmCancelOwner string
+	confirmMode        bool
+
+	cancelFlash    string
+	cancelFlashErr bool
+
 	spinner spinner.Model
 
 	loading   bool
@@ -269,6 +277,20 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.detailOpen = false
 			return m, nil
 		}
+		// Confirm-cancel modal.
+		if m.confirmMode {
+			switch msg.String() {
+			case "ctrl+c":
+				return m, tea.Quit
+			case "y", "Y":
+				id := m.confirmCancelID
+				m.confirmMode = false
+				return m, m.cancelJobCmd(id)
+			default:
+				m.confirmMode = false
+				return m, nil
+			}
+		}
 		switch msg.String() {
 		case "q", "ctrl+c", "esc":
 			return m, tea.Quit
@@ -303,6 +325,9 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "enter":
 			m.openDetail()
+			return m, nil
+		case "c":
+			m.maybeOpenConfirmCancel()
 			return m, nil
 		case "/":
 			m.filterMode = true
@@ -398,9 +423,73 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		m.spinner, cmd = m.spinner.Update(msg)
 		return m, cmd
+
+	case cancelResultMsg:
+		if msg.err != nil {
+			m.cancelFlash = fmt.Sprintf("failed to cancel job %d: %s", msg.id, msg.err.Error())
+			m.cancelFlashErr = true
+		} else {
+			m.cancelFlash = fmt.Sprintf("cancelled job %d", msg.id)
+			m.cancelFlashErr = false
+		}
+		// Immediately refresh jobs so the table updates.
+		return m, m.fetchJobsCmd()
 	}
 
 	return m, nil
+}
+
+type cancelResultMsg struct {
+	id  int64
+	err error
+}
+
+func (m *model) cancelJobCmd(id int64) tea.Cmd {
+	c := m.client
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		err := c.Cancel(ctx, id)
+		return cancelResultMsg{id: id, err: err}
+	}
+}
+
+// maybeOpenConfirmCancel checks if the cursor is on a cancellable job row
+// (Jobs or Queue tab) AND that the job belongs to the current user. If both
+// are true, it opens a y/N confirmation modal.
+func (m *model) maybeOpenConfirmCancel() {
+	cur := m.cursor[m.tab]
+	var id int64
+	var user string
+	var name string
+	switch m.tab {
+	case tabJobs:
+		if cur >= 0 && cur < len(m.lastJobs) {
+			id = m.lastJobs[cur].JobID
+			user = m.lastJobs[cur].User
+			name = m.lastJobs[cur].Name
+		}
+	case tabQueue:
+		if cur >= 0 && cur < len(m.lastQueue) {
+			id = m.lastQueue[cur].JobID
+			user = m.lastQueue[cur].User
+			name = m.lastQueue[cur].Name
+		}
+	default:
+		return
+	}
+	if id == 0 {
+		return
+	}
+	if me := currentUser(); user != me {
+		m.cancelFlash = fmt.Sprintf("refused: job %d belongs to %s, not %s", id, user, me)
+		m.cancelFlashErr = true
+		return
+	}
+	m.confirmCancelID = id
+	m.confirmCancelOwner = user
+	m.confirmCancelName = name
+	m.confirmMode = true
 }
 
 // maybeFinishLoading flips m.loading off once both nodes and jobs have landed,
@@ -474,6 +563,8 @@ func (m *model) View() string {
 		content = m.renderHelp(contentHeight)
 	case m.detailOpen:
 		content = m.renderDetailOverlay(contentHeight)
+	case m.confirmMode:
+		content = m.renderConfirmCancel(contentHeight)
 	case !m.nodesLoaded || !m.jobsLoaded:
 		content = m.renderLoading(contentHeight)
 	case m.tab == tabHistory && !m.acctLoaded:
@@ -537,6 +628,22 @@ func (m *model) resizeViewport() {
 		m.viewport = viewport.New(m.width, 10)
 		m.viewportReady = true
 	}
+}
+
+func (m *model) renderConfirmCancel(maxHeight int) string {
+	body := strings.Join([]string{
+		helpTitleStyle.Render(fmt.Sprintf("Cancel job %d?", m.confirmCancelID)),
+		"",
+		fmt.Sprintf("  %s  %s", render.ColorFaint("user:"), m.confirmCancelOwner),
+		fmt.Sprintf("  %s  %s", render.ColorFaint("name:"), m.confirmCancelName),
+		"",
+		"  " + render.ColorYellow("y") + " confirm cancel    " + render.ColorYellow("n / esc") + " abort",
+	}, "\n")
+	style := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("196")).
+		Padding(1, 3)
+	return lipgloss.Place(m.width, maxHeight, lipgloss.Center, lipgloss.Center, style.Render(body))
 }
 
 func (m *model) renderDetailOverlay(maxHeight int) string {
@@ -731,6 +838,7 @@ func (m *model) renderHelp(maxHeight int) string {
 		"  " + helpKeyStyle.Render("/") + "           filter rows (name/user/reason)",
 		"  " + helpKeyStyle.Render("m") + "           toggle Me mode (your jobs only)",
 		"  " + helpKeyStyle.Render("enter") + "       open detail for the selected row",
+		"  " + helpKeyStyle.Render("c") + "           cancel selected job (own jobs only)",
 		"  " + helpKeyStyle.Render("↑ / ↓ / k / j") + "  move selection cursor",
 		"  " + helpKeyStyle.Render("g / G") + "       jump to first / last row",
 		"  " + helpKeyStyle.Render("pgup / pgdn") + " scroll one page",
@@ -967,12 +1075,21 @@ func (m *model) renderFooter() string {
 	} else if !m.lastFetch.IsZero() {
 		status = fmt.Sprintf("last update %s", m.lastFetch.Format("15:04:05"))
 	}
-	help := "? help · q quit · r refresh · tab switch · s sort · / filter · m me"
+	help := "? help · q quit · r refresh · tab · s sort · / filter · m me · c cancel"
 	if m.meMode {
 		help += "  ·  " + render.ColorYellow("Me mode")
 	}
 	if m.filter != "" {
 		help += "  ·  " + render.ColorYellow("filter: "+m.filter)
+	}
+	if m.cancelFlash != "" {
+		flashed := m.cancelFlash
+		if m.cancelFlashErr {
+			flashed = render.ColorRed(flashed)
+		} else {
+			flashed = render.ColorGreen(flashed)
+		}
+		help += "  ·  " + flashed
 	}
 	left := footerStyle.Render(help)
 
