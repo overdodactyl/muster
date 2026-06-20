@@ -1,0 +1,8 @@
+bin/
+dist/
+/muster
+*.log
+testdata/local/
+.idea/
+.vscode/
+.gotmp/
