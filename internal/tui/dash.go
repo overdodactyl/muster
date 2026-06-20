@@ -59,7 +59,10 @@ func Run(client slurm.Client, partition string) error {
 		cursor:      map[tabIdx]int{},
 		rowCounts:   map[tabIdx]int{},
 	}
-	p := tea.NewProgram(m, tea.WithAltScreen())
+	p := tea.NewProgram(m,
+		tea.WithAltScreen(),
+		tea.WithMouseCellMotion(), // capture mouse so wheel scrolls the dash, not the terminal scrollback
+	)
 	_, err := p.Run()
 	return err
 }
@@ -422,6 +425,13 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case spinner.TickMsg:
 		var cmd tea.Cmd
 		m.spinner, cmd = m.spinner.Update(msg)
+		return m, cmd
+
+	case tea.MouseMsg:
+		// Wheel events: delegate to viewport so the dash content scrolls
+		// instead of the terminal's scrollback buffer.
+		var cmd tea.Cmd
+		m.viewport, cmd = m.viewport.Update(msg)
 		return m, cmd
 
 	case cancelResultMsg:
