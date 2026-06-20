@@ -125,18 +125,16 @@ func (c *cliClient) ClusterName(ctx context.Context) (string, error) {
 }
 
 // JobEfficiency calls `sstat` on the .batch step and parses cumulative CPU
-// time + peak RSS. Returns zero-value (no error) if the step isn't present
-// (interactive jobs, non-batch wrappers).
+// time + running-average and peak RSS. Returns zero-value (no error) if the
+// step isn't present (interactive jobs, non-batch wrappers).
 func (c *cliClient) JobEfficiency(ctx context.Context, jobID int64) (JobEfficiency, error) {
 	out, err := c.run(ctx, c.sstat,
 		fmt.Sprintf("--jobs=%d.batch", jobID),
 		"--noheader",
 		"--parsable2",
-		"--format=JobID,AveCPU,MaxRSS",
+		"--format=JobID,AveCPU,AveRSS,MaxRSS",
 	)
 	if err != nil {
-		// sstat returns non-zero when the .batch step is missing — treat as
-		// "no live stats yet" rather than a hard error.
 		return JobEfficiency{JobID: jobID}, nil
 	}
 	line := strings.TrimSpace(string(out))
@@ -144,14 +142,55 @@ func (c *cliClient) JobEfficiency(ctx context.Context, jobID int64) (JobEfficien
 		return JobEfficiency{JobID: jobID}, nil
 	}
 	parts := strings.Split(line, "|")
-	if len(parts) < 3 {
+	if len(parts) < 4 {
 		return JobEfficiency{JobID: jobID}, nil
 	}
 	return JobEfficiency{
 		JobID:    jobID,
 		AveCPU:   parseSlurmDuration(parts[1]),
-		MaxRSSMB: parseSlurmBytes(parts[2]),
+		AveRSSMB: parseSlurmBytes(parts[2]),
+		MaxRSSMB: parseSlurmBytes(parts[3]),
 	}, nil
+}
+
+// JobGPUUtil runs nvidia-smi inside the running job's allocation via
+// 'srun --jobid=<id> --overlap'. Returns per-GPU compute and memory stats.
+// On clusters without nvidia GPUs (or where srun --overlap is restricted)
+// it returns an empty slice and a nil error so the UI just skips the line.
+func (c *cliClient) JobGPUUtil(ctx context.Context, jobID int64) ([]GPUUtil, error) {
+	out, err := c.run(ctx, "srun",
+		fmt.Sprintf("--jobid=%d", jobID),
+		"--overlap",
+		"--quiet",
+		"nvidia-smi",
+		"--query-gpu=index,utilization.gpu,memory.used,memory.total",
+		"--format=csv,noheader,nounits",
+	)
+	if err != nil {
+		// Non-GPU jobs / srun denied / nvidia-smi missing → no stats.
+		return nil, nil
+	}
+	var samples []GPUUtil
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		fields := strings.Split(line, ",")
+		if len(fields) < 4 {
+			continue
+		}
+		idx, e1 := strconv.Atoi(strings.TrimSpace(fields[0]))
+		util, e2 := strconv.Atoi(strings.TrimSpace(fields[1]))
+		used, e3 := strconv.Atoi(strings.TrimSpace(fields[2]))
+		total, e4 := strconv.Atoi(strings.TrimSpace(fields[3]))
+		if e1 != nil || e2 != nil || e3 != nil || e4 != nil {
+			continue
+		}
+		samples = append(samples, GPUUtil{
+			Index:      idx,
+			UtilGPUPct: util,
+			MemUsedMB:  used,
+			MemTotalMB: total,
+		})
+	}
+	return samples, nil
 }
 
 // parseSlurmDuration handles Slurm's "HH:MM:SS[.frac]" or "D-HH:MM:SS" duration

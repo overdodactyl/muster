@@ -67,7 +67,16 @@ type JobDetail struct {
 type JobEfficiency struct {
 	JobID    int64
 	AveCPU   time.Duration // wall-clock cumulative CPU time used (across tasks)
+	AveRSSMB int           // running-average resident set size in MB ("current")
 	MaxRSSMB int           // peak resident set size in MB
+}
+
+// GPUUtil is one nvidia-smi sample from inside a running job's allocation.
+type GPUUtil struct {
+	Index       int // GPU index on the node
+	UtilGPUPct  int // 0..100, GPU compute utilization
+	MemUsedMB   int
+	MemTotalMB  int
 }
 
 type Partition struct {

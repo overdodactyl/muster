@@ -142,6 +142,10 @@ type model struct {
 	// History-of-job-name comparison for the open detail.
 	detailHistoryRuns []slurm.AcctJob
 
+	// nvidia-smi snapshot for the currently-detailed job (GPU jobs only),
+	// refreshed every 3rd dash tick to keep srun overhead bounded.
+	detailGPU []slurm.GPUUtil
+
 	// In-log search (active only while the log viewer is open).
 	logSearch       string
 	logSearchMode   bool
@@ -557,6 +561,20 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.fetchLogTailCmd(m.detailJobID),
 				m.fetchEfficiencyCmd(m.detailJobID),
 			)
+			// nvidia-smi via srun is expensive (spawns a step) — only every
+			// 3rd tick (~30s) to keep scheduler overhead bounded.
+			if m.ticks%3 == 0 {
+				gpuJob := false
+				for _, j := range m.lastJobs {
+					if j.JobID == m.detailJobID && j.GPUs > 0 {
+						gpuJob = true
+						break
+					}
+				}
+				if gpuJob {
+					cmds = append(cmds, m.fetchGPUUtilCmd(m.detailJobID))
+				}
+			}
 		}
 		return m, tea.Batch(cmds...)
 
@@ -617,6 +635,12 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case gpuUtilMsg:
+		if msg.jobID == m.detailJobID && m.detailOpen && msg.err == nil {
+			m.detailGPU = msg.samples
+		}
+		return m, nil
+
 	case cancelResultMsg:
 		if msg.err != nil {
 			m.cancelFlash = fmt.Sprintf("failed to cancel job %d: %s", msg.id, msg.err.Error())
@@ -672,6 +696,22 @@ type jobHistoryMsg struct {
 	jobID int64
 	runs  []slurm.AcctJob
 	err   error
+}
+
+type gpuUtilMsg struct {
+	jobID   int64
+	samples []slurm.GPUUtil
+	err     error
+}
+
+func (m *model) fetchGPUUtilCmd(jobID int64) tea.Cmd {
+	c := m.client
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		s, err := c.JobGPUUtil(ctx, jobID)
+		return gpuUtilMsg{jobID: jobID, samples: s, err: err}
+	}
 }
 
 func (m *model) fetchJobHistoryCmd(jobID int64, jobName, partition string) tea.Cmd {
@@ -1099,6 +1139,9 @@ func (m *model) renderDetailOverlay(maxHeight int) string {
 	if effLine := m.formatEfficiencyLine(); effLine != "" {
 		headerLines = append(headerLines, effLine)
 	}
+	if gpuLine := m.formatGPUUtilLine(); gpuLine != "" {
+		headerLines = append(headerLines, gpuLine)
+	}
 	if histLine := m.formatHistoryLine(); histLine != "" {
 		headerLines = append(headerLines, histLine)
 	}
@@ -1311,6 +1354,7 @@ func (m *model) openDetail() tea.Cmd {
 	m.detailEff = slurm.JobEfficiency{}
 	m.detailEffSeries = nil
 	m.detailHistoryRuns = nil
+	m.detailGPU = nil
 
 	switch m.tab {
 	case tabPartitions:
@@ -1372,10 +1416,12 @@ func (m *model) openDetail() tea.Cmd {
 	if m.detailJobID > 0 {
 		// Find the selected JobRow so we can pass its name to the history query.
 		var name, part string
+		hasGPU := false
 		for _, j := range m.lastJobs {
 			if j.JobID == m.detailJobID {
 				name = j.Name
 				part = j.Partition
+				hasGPU = j.GPUs > 0
 				break
 			}
 		}
@@ -1384,15 +1430,20 @@ func (m *model) openDetail() tea.Cmd {
 				if q.JobID == m.detailJobID {
 					name = q.Name
 					part = q.Partition
+					hasGPU = q.GPUs > 0
 					break
 				}
 			}
 		}
-		return tea.Batch(
+		cmds := []tea.Cmd{
 			m.fetchLogTailCmd(m.detailJobID),
 			m.fetchEfficiencyCmd(m.detailJobID),
 			m.fetchJobHistoryCmd(m.detailJobID, name, part),
-		)
+		}
+		if hasGPU {
+			cmds = append(cmds, m.fetchGPUUtilCmd(m.detailJobID))
+		}
+		return tea.Batch(cmds...)
 	}
 	return nil
 }
@@ -1548,7 +1599,12 @@ func (m *model) formatEfficiencyLine() string {
 	parts := []string{
 		fmt.Sprintf("%.1f / %d cores (%s)", cores, allocCPU, pctStr),
 	}
-	if e.MaxRSSMB > 0 {
+	if e.AveRSSMB > 0 {
+		parts = append(parts, "mem "+render.HumanMB(e.AveRSSMB))
+		if e.MaxRSSMB > e.AveRSSMB {
+			parts = append(parts, "peak "+render.HumanMB(e.MaxRSSMB))
+		}
+	} else if e.MaxRSSMB > 0 {
 		parts = append(parts, "peak "+render.HumanMB(e.MaxRSSMB))
 	}
 	if len(m.detailEffSeries) > 1 {
@@ -1556,6 +1612,29 @@ func (m *model) formatEfficiencyLine() string {
 		parts = append(parts, "trend "+spark)
 	}
 	return detailLine("live", strings.Join(parts, " · "))
+}
+
+// formatGPUUtilLine renders one entry per assigned GPU with compute% and
+// memory used/total. Empty when no nvidia-smi data has arrived yet.
+func (m *model) formatGPUUtilLine() string {
+	if len(m.detailGPU) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(m.detailGPU))
+	for _, g := range m.detailGPU {
+		util := fmt.Sprintf("%d%%", g.UtilGPUPct)
+		switch {
+		case g.UtilGPUPct >= 75:
+			util = render.ColorGreen(util)
+		case g.UtilGPUPct >= 25:
+			util = render.ColorYellow(util)
+		default:
+			util = render.ColorRed(util)
+		}
+		mem := fmt.Sprintf("%s/%s", render.HumanMB(g.MemUsedMB), render.HumanMB(g.MemTotalMB))
+		parts = append(parts, fmt.Sprintf("#%d %s %s", g.Index, util, mem))
+	}
+	return detailLine("gpu util", strings.Join(parts, "  ·  "))
 }
 
 func renderPartitionDetail(p aggregate.PartitionSummary) string {
