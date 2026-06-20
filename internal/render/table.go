@@ -189,6 +189,42 @@ func RenderUsers(w io.Writer, rows []aggregate.UserRollup) {
 	t.Render()
 }
 
+func RenderGPUs(w io.Writer, rows []aggregate.GPURow) {
+	if w == nil {
+		w = os.Stdout
+	}
+	if len(rows) == 0 {
+		fmt.Fprintln(w, "no GPU-bearing nodes in this scope")
+		return
+	}
+	t := newTable(w, []string{"NODE", "GPU", "STATE", "USER", "JOB", "RUNTIME"})
+	for _, r := range rows {
+		gpu := fmt.Sprintf("#%d", r.Index)
+		if r.Model != "" {
+			gpu = fmt.Sprintf("%s #%d", r.Model, r.Index)
+		}
+		state := ColorGreen("idle")
+		user := ColorFaint("-")
+		job := ColorFaint("-")
+		runtime := ColorFaint("-")
+		if r.InUse {
+			state = ColorRed("in use")
+			user = ColorCyan(r.User)
+			job = fmt.Sprintf("%s (%d)", truncate(r.JobName, 20), r.JobID)
+			runtime = HumanDuration(r.Runtime)
+		}
+		t.AppendRow(table.Row{
+			ColorCyan(r.Node),
+			gpu,
+			state,
+			user,
+			job,
+			runtime,
+		})
+	}
+	t.Render()
+}
+
 func RenderReservations(w io.Writer, rows []aggregate.ReservationRow) {
 	if w == nil {
 		w = os.Stdout

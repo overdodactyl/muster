@@ -96,6 +96,7 @@ func parseSqueueJobs(b []byte) ([]Job, error) {
 			MemPerCPU:   j.MemoryPerCPU.Int(),
 			MemPerNode:  j.MemoryPerNode.Int(),
 			GRESPerNode: gres,
+			GRESDetail:  j.GRESDetail,
 			SubmitTime:  j.SubmitTime.Time(),
 			StartTime:   j.StartTime.Time(),
 			EndTime:     j.EndTime.Time(),

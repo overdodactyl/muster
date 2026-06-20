@@ -32,6 +32,7 @@ type Job struct {
 	MemPerCPU   int
 	MemPerNode  int
 	GRESPerNode string
+	GRESDetail  []string // per-node assigned GRES, e.g. ["gpu:a100:1(IDX:0)"]
 	SubmitTime  time.Time
 	StartTime   time.Time
 	EndTime     time.Time

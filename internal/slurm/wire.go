@@ -58,6 +58,7 @@ type squeueJob struct {
 	MemoryPerNode slurmNum `json:"memory_per_node"`
 	TresPerNode   string   `json:"tres_per_node"`
 	TresPerJob    string   `json:"tres_per_job"`
+	GRESDetail    []string `json:"gres_detail"`
 	SubmitTime    slurmNum `json:"submit_time"`
 	StartTime     slurmNum `json:"start_time"`
 	EndTime       slurmNum `json:"end_time"`
