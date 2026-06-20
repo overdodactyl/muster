@@ -75,10 +75,28 @@ func printExplain(w *os.File, r aggregate.ExplainReport) {
 	fmt.Fprintf(w, "%s %d (%s / %s)\n",
 		render.Bold("Job"), j.ID, render.ColorCyan(j.User), j.Name)
 	fmt.Fprintf(w, "  State:      %s\n", colorState(j.State))
-	if j.Reason != "" {
+	// Slurm sets state_reason to "None" for running jobs; only the pending
+	// reason explainer is meaningful when the job is actually waiting.
+	if j.State == "PENDING" && j.Reason != "" && j.Reason != "None" {
 		fmt.Fprintf(w, "  Reason:     %s — %s\n", j.Reason, r.ReasonHuman)
 	}
 	fmt.Fprintf(w, "  Partition:  %s\n", j.Partition)
+	if j.State == "RUNNING" && !j.StartTime.IsZero() {
+		runtime := time.Since(j.StartTime)
+		fmt.Fprintf(w, "  Nodes:      %s\n", j.Nodes)
+		fmt.Fprintf(w, "  Started:    %s  (running %s)\n",
+			j.StartTime.Format("2006-01-02 15:04"), render.HumanDuration(runtime))
+		if j.TimeLimit > 0 {
+			remaining := j.TimeLimit - runtime
+			if remaining > 0 {
+				fmt.Fprintf(w, "  Time left:  %s  (limit %s)\n",
+					render.HumanDuration(remaining), render.HumanDuration(j.TimeLimit))
+			} else {
+				fmt.Fprintf(w, "  Time left:  %s  (over limit; scheduler will TIMEOUT)\n",
+					render.ColorRed("0"))
+			}
+		}
+	}
 
 	reqs := []string{fmt.Sprintf("%d CPUs", j.CPUs)}
 	if r.RequiredGPU > 0 {
@@ -116,7 +134,7 @@ func printExplain(w *os.File, r aggregate.ExplainReport) {
 	}
 
 	if j.State != "PENDING" {
-		fmt.Fprintf(w, "\n(job is %s; no fit check needed)\n", j.State)
+		fmt.Fprintf(w, "\n%s\n", render.ColorFaint("(job is "+j.State+"; no fit check needed)"))
 		return
 	}
 
