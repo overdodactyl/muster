@@ -135,6 +135,29 @@ func RenderNodes(w io.Writer, rows []aggregate.NodeRow, showJobs bool) {
 	t.Render()
 }
 
+func RenderUsers(w io.Writer, rows []aggregate.UserRollup) {
+	if w == nil {
+		w = os.Stdout
+	}
+	if len(rows) == 0 {
+		fmt.Fprintln(w, "no users matched")
+		return
+	}
+	t := newTable(w, []string{"USER", "RUN", "PEND", "CPUS", "GPUS", "MEM", "OLDEST RUN"})
+	for _, r := range rows {
+		t.Append([]string{
+			ColorCyan(r.User),
+			fmt.Sprintf("%d", r.Running),
+			fmt.Sprintf("%d", r.Pending),
+			fmt.Sprintf("%d", r.CPUsHeld),
+			fmt.Sprintf("%d", r.GPUsHeld),
+			HumanMB(r.MemoryMBHeld),
+			HumanDuration(r.OldestRunAge),
+		})
+	}
+	t.Render()
+}
+
 // JoinList truncates a string slice for fixed-width display.
 func JoinList(items []string, max int) string {
 	if len(items) == 0 {
