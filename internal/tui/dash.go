@@ -84,6 +84,7 @@ type model struct {
 
 	sortIndex map[tabIdx]int
 	showHelp  bool
+	meMode    bool
 
 	filter      string
 	filterMode  bool
@@ -255,6 +256,9 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Batch(cmds...)
 		case "s":
 			m.cycleSort()
+		case "m":
+			m.meMode = !m.meMode
+			m.viewport.GotoTop()
 		case "/":
 			m.filterMode = true
 			m.filterInput.SetValue(m.filter)
@@ -452,6 +456,7 @@ func (m *model) renderHelp(maxHeight int) string {
 		"  " + helpKeyStyle.Render("r") + "           refresh now",
 		"  " + helpKeyStyle.Render("s") + "           cycle sort key (jobs, users, queue)",
 		"  " + helpKeyStyle.Render("/") + "           filter rows (name/user/reason)",
+		"  " + helpKeyStyle.Render("m") + "           toggle Me mode (your jobs only)",
 		"  " + helpKeyStyle.Render("↑ / ↓ / k / j") + "  scroll one line",
 		"  " + helpKeyStyle.Render("pgup / pgdn") + " scroll one page",
 		"  " + helpKeyStyle.Render("?") + "           toggle this help",
@@ -518,6 +523,22 @@ func (m *model) renderTabBody() string {
 		return false
 	}
 
+	me := ""
+	if m.meMode {
+		me = currentUser()
+	}
+	hasUser := func(target string, users []string) bool {
+		if target == "" {
+			return true
+		}
+		for _, u := range users {
+			if u == target {
+				return true
+			}
+		}
+		return false
+	}
+
 	switch m.tab {
 	case tabPartitions:
 		rows := aggregate.Partitions(m.nodes, m.jobs, m.partition)
@@ -533,19 +554,20 @@ func (m *model) renderTabBody() string {
 		render.RenderPartitions(&buf, rows)
 	case tabNodes:
 		rows := aggregate.Nodes(m.nodes, m.jobs, m.partition, nil, false, false)
-		if f != "" {
-			filtered := rows[:0]
-			for _, r := range rows {
-				if contains(append([]string{r.Name}, r.Users...)...) {
-					filtered = append(filtered, r)
-				}
+		filtered := rows[:0]
+		for _, r := range rows {
+			if me != "" && !hasUser(me, r.Users) {
+				continue
 			}
-			rows = filtered
+			if !contains(append([]string{r.Name}, r.Users...)...) {
+				continue
+			}
+			filtered = append(filtered, r)
 		}
-		render.RenderNodes(&buf, rows, false)
+		render.RenderNodes(&buf, filtered, false)
 	case tabJobs:
 		sort := orDefault(m.currentSort(), "cpus")
-		rows := aggregate.Jobs(m.jobs, m.partition, "", false, sort, 0, time.Now())
+		rows := aggregate.Jobs(m.jobs, m.partition, me, false, sort, 0, time.Now())
 		if f != "" {
 			filtered := rows[:0]
 			for _, r := range rows {
@@ -558,7 +580,7 @@ func (m *model) renderTabBody() string {
 		render.RenderJobs(&buf, rows)
 	case tabUsers:
 		sort := orDefault(m.currentSort(), "cpus")
-		rows := aggregate.Users(m.jobs, m.partition, "", sort, 0, time.Now())
+		rows := aggregate.Users(m.jobs, m.partition, me, sort, 0, time.Now())
 		if f != "" {
 			filtered := rows[:0]
 			for _, r := range rows {
@@ -572,28 +594,30 @@ func (m *model) renderTabBody() string {
 	case tabQueue:
 		sort := orDefault(m.currentSort(), "priority")
 		rows := aggregate.Queue(m.jobs, m.partition, false, "", sort, time.Now())
-		if f != "" {
-			filtered := rows[:0]
-			for _, r := range rows {
-				if contains(r.User, r.Name, r.Reason, r.ReasonHuman) {
-					filtered = append(filtered, r)
-				}
+		filtered := rows[:0]
+		for _, r := range rows {
+			if me != "" && r.User != me {
+				continue
 			}
-			rows = filtered
+			if !contains(r.User, r.Name, r.Reason, r.ReasonHuman) {
+				continue
+			}
+			filtered = append(filtered, r)
 		}
-		render.RenderQueue(&buf, rows)
+		render.RenderQueue(&buf, filtered)
 	case tabHistory:
 		rows := aggregate.History(m.acct, "user", m.partition, nil)
-		if f != "" {
-			filtered := rows[:0]
-			for _, r := range rows {
-				if contains(r.Key) {
-					filtered = append(filtered, r)
-				}
+		filtered := rows[:0]
+		for _, r := range rows {
+			if me != "" && r.Key != me {
+				continue
 			}
-			rows = filtered
+			if !contains(r.Key) {
+				continue
+			}
+			filtered = append(filtered, r)
 		}
-		render.RenderHistory(&buf, rows, "user")
+		render.RenderHistory(&buf, filtered, "user")
 	}
 	body := strings.TrimRight(buf.String(), "\n")
 	return contentStyle.Render(body)
@@ -621,7 +645,10 @@ func (m *model) renderFooter() string {
 	} else if !m.lastFetch.IsZero() {
 		status = fmt.Sprintf("last update %s", m.lastFetch.Format("15:04:05"))
 	}
-	help := "? help · q quit · r refresh · tab switch · s sort · / filter"
+	help := "? help · q quit · r refresh · tab switch · s sort · / filter · m me"
+	if m.meMode {
+		help += "  ·  " + render.ColorYellow("Me mode")
+	}
 	if m.filter != "" {
 		help += "  ·  " + render.ColorYellow("filter: "+m.filter)
 	}
