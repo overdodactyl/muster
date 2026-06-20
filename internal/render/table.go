@@ -67,18 +67,30 @@ func RenderPartitions(w io.Writer, rows []aggregate.PartitionSummary) {
 		fmt.Fprintln(w, "no partitions matched")
 		return
 	}
-	t := newTable(w, []string{"PARTITION", "NODES I/M/A/D", "CPUS", "GPUS", "MEM", "RUN", "PEND"})
-	for _, r := range rows {
-		gpus := "-"
+	cpuStrs := make([]string, len(rows))
+	gpuStrs := make([]string, len(rows))
+	memStrs := make([]string, len(rows))
+	for i, r := range rows {
+		cpuStrs[i] = fmt.Sprintf("%d/%d", r.AllocCPUs, r.TotalCPUs)
 		if r.TotalGPUs > 0 {
 			model := ""
 			if r.GPUModel != "" {
 				model = " " + r.GPUModel
 			}
-			gpus = fmt.Sprintf("%d/%d%s  %s", r.AllocGPUs, r.TotalGPUs, model, Bar(r.AllocGPUs, r.TotalGPUs, 10))
+			gpuStrs[i] = fmt.Sprintf("%d/%d%s", r.AllocGPUs, r.TotalGPUs, model)
 		}
-		cpus := fmt.Sprintf("%d/%d  %s", r.AllocCPUs, r.TotalCPUs, Bar(r.AllocCPUs, r.TotalCPUs, 10))
-		mem := fmt.Sprintf("%s/%s  %s", HumanMB(r.AllocMemMB), HumanMB(r.TotalMemMB), Bar(r.AllocMemMB, r.TotalMemMB, 10))
+		memStrs[i] = fmt.Sprintf("%s/%s", HumanMB(r.AllocMemMB), HumanMB(r.TotalMemMB))
+	}
+	cw, gw, mw := maxLen(cpuStrs), maxLen(gpuStrs), maxLen(memStrs)
+
+	t := newTable(w, []string{"PARTITION", "NODES I/M/A/D", "CPUS", "GPUS", "MEM", "RUN", "PEND"})
+	for i, r := range rows {
+		gpus := "-"
+		if gpuStrs[i] != "" {
+			gpus = padRight(gpuStrs[i], gw) + "  " + Bar(r.AllocGPUs, r.TotalGPUs, 10)
+		}
+		cpus := padRight(cpuStrs[i], cw) + "  " + Bar(r.AllocCPUs, r.TotalCPUs, 10)
+		mem := padRight(memStrs[i], mw) + "  " + Bar(r.AllocMemMB, r.TotalMemMB, 10)
 		t.AppendRow(table.Row{
 			ColorCyan(r.Name),
 			fmtStateCounts(r.NodeCounts),
@@ -101,15 +113,33 @@ func RenderNodes(w io.Writer, rows []aggregate.NodeRow, showJobs bool) {
 		fmt.Fprintln(w, "no nodes matched")
 		return
 	}
-	t := newTable(w, []string{"NODE", "PART", "STATE", "CPUS", "MEM", "GPU", "USERS"})
-	for _, r := range rows {
-		gpu := ColorFaint("-")
+	cpuStrs := make([]string, len(rows))
+	gpuStrs := make([]string, len(rows))
+	memStrs := make([]string, len(rows))
+	memUsed := make([]int, len(rows))
+	for i, r := range rows {
+		cpuStrs[i] = fmt.Sprintf("%d/%d", r.CPUsAlloc, r.CPUsTotal)
 		if r.GPUsTotal > 0 {
 			model := ""
 			if r.GPUModel != "" {
 				model = " " + r.GPUModel
 			}
-			gpu = fmt.Sprintf("%d/%d%s  %s", r.GPUsAlloc, r.GPUsTotal, model, Bar(r.GPUsAlloc, r.GPUsTotal, 6))
+			gpuStrs[i] = fmt.Sprintf("%d/%d%s", r.GPUsAlloc, r.GPUsTotal, model)
+		}
+		mu := r.MemTotalMB - r.MemFreeMB
+		if mu < r.MemAllocMB {
+			mu = r.MemAllocMB
+		}
+		memUsed[i] = mu
+		memStrs[i] = fmt.Sprintf("%s/%s", HumanMB(mu), HumanMB(r.MemTotalMB))
+	}
+	cw, gw, mw := maxLen(cpuStrs), maxLen(gpuStrs), maxLen(memStrs)
+
+	t := newTable(w, []string{"NODE", "PART", "STATE", "CPUS", "MEM", "GPU", "USERS"})
+	for i, r := range rows {
+		gpu := ColorFaint("-")
+		if gpuStrs[i] != "" {
+			gpu = padRight(gpuStrs[i], gw) + "  " + Bar(r.GPUsAlloc, r.GPUsTotal, 6)
 		}
 		users := ColorFaint("-")
 		if showJobs && len(r.UserJobs) > 0 {
@@ -121,12 +151,8 @@ func RenderNodes(w io.Writer, rows []aggregate.NodeRow, showJobs bool) {
 			}
 			users = JoinList(coloured, 6)
 		}
-		memUsed := r.MemTotalMB - r.MemFreeMB
-		if memUsed < r.MemAllocMB {
-			memUsed = r.MemAllocMB
-		}
-		cpus := fmt.Sprintf("%d/%d  %s", r.CPUsAlloc, r.CPUsTotal, Bar(r.CPUsAlloc, r.CPUsTotal, 8))
-		mem := fmt.Sprintf("%s/%s  %s", HumanMB(memUsed), HumanMB(r.MemTotalMB), Bar(memUsed, r.MemTotalMB, 8))
+		cpus := padRight(cpuStrs[i], cw) + "  " + Bar(r.CPUsAlloc, r.CPUsTotal, 8)
+		mem := padRight(memStrs[i], mw) + "  " + Bar(memUsed[i], r.MemTotalMB, 8)
 		t.AppendRow(table.Row{
 			ColorCyan(r.Name),
 			r.Partition,
@@ -243,4 +269,23 @@ func JoinList(items []string, max int) string {
 		return strings.Join(items, ", ")
 	}
 	return strings.Join(items[:max], ", ") + fmt.Sprintf(", +%d more", len(items)-max)
+}
+
+// maxLen returns the longest string length in the slice.
+func maxLen(ss []string) int {
+	n := 0
+	for _, s := range ss {
+		if len(s) > n {
+			n = len(s)
+		}
+	}
+	return n
+}
+
+// padRight space-pads s on the right so it is at least n runes wide.
+func padRight(s string, n int) string {
+	if len(s) >= n {
+		return s
+	}
+	return s + strings.Repeat(" ", n-len(s))
 }
