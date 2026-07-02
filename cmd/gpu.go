@@ -40,6 +40,13 @@ The mapping comes from squeue's per-job gres_detail field (e.g.
 		if flagJSON {
 			return render.JSON(os.Stdout, rows)
 		}
+		lanids := make([]string, 0, len(rows))
+		for _, r := range rows {
+			if r.User != "" {
+				lanids = append(lanids, r.User)
+			}
+		}
+		render.PrewarmNames(lanids)
 		render.RenderGPUs(os.Stdout, rows)
 		return nil
 	},

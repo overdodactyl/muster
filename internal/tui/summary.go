@@ -218,7 +218,7 @@ func (m *model) renderUserCard() string {
 	memSpark := render.Sparkline(m.sparkSeries(func(s historySample) int { return s.myMemPct }), userSparkW)
 
 	lines := []string{
-		cardTitleStyle.Render("You: "+username) + cardCountStyle.Render(fmt.Sprintf("  %d job%s", totalJobs, plural(totalJobs))),
+		cardTitleStyle.Render("You: "+render.LookupNameFull(username)) + cardCountStyle.Render(fmt.Sprintf("  %d job%s", totalJobs, plural(totalJobs))),
 		fmt.Sprintf("%s  %s", padRight("State", 7), state),
 		fmt.Sprintf("%s  %d CPU %s   %d GPU %s   %s mem %s",
 			padRight("Holding", 7), r.CPUsHeld, cpuSpark, r.GPUsHeld, gpuSpark, render.HumanMB(r.MemoryMBHeld), memSpark),

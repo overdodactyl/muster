@@ -45,6 +45,11 @@ var queueCmd = &cobra.Command{
 		if flagJSON {
 			return render.JSON(os.Stdout, rows)
 		}
+		lanids := make([]string, len(rows))
+		for i, r := range rows {
+			lanids[i] = r.User
+		}
+		render.PrewarmNames(lanids)
 		render.RenderQueue(os.Stdout, rows)
 		return nil
 	},

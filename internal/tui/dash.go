@@ -181,6 +181,16 @@ type model struct {
 	loading   bool
 	lastErr   error
 	lastFetch time.Time
+
+	// Real-name resolution (opt-in via `n` or --names). names holds resolved
+	// lanid → display-name entries (already merged with all past results and
+	// pushed to render.SetNameResolver). namesFetchedFor tracks every lanid
+	// we've queried so misses aren't retried each refresh. namesGetentBroken
+	// latches if the getent subprocess itself errored — one strike and we
+	// stop trying for the session; LookupName falls back to lanid.
+	names             map[string]string
+	namesFetchedFor   map[string]struct{}
+	namesGetentBroken bool
 }
 
 // sortOptions defines which sort keys cycle on `s` for each tab. Tabs not
@@ -448,6 +458,9 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "m":
 			m.meMode = !m.meMode
 			m.viewport.GotoTop()
+		case "n":
+			render.SetNames(!render.NamesEnabled())
+			return m, nil
 		case "p", "P":
 			m.cyclePartition(msg.String() == "P")
 			return m, nil
@@ -541,6 +554,30 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.lastFetch = msg.when
 		m.maybeFinishLoading()
+		if cmd := m.enqueueNameFetches(msg.jobs); cmd != nil {
+			return m, cmd
+		}
+
+	case namesMsg:
+		if m.names == nil {
+			m.names = map[string]string{}
+		}
+		if m.namesFetchedFor == nil {
+			m.namesFetchedFor = map[string]struct{}{}
+		}
+		if msg.err != nil {
+			// Latch off — getent isn't going to start working mid-session.
+			m.namesGetentBroken = true
+		} else {
+			for _, id := range msg.queried {
+				m.namesFetchedFor[id] = struct{}{}
+			}
+			for k, v := range msg.resolved {
+				m.names[k] = v
+			}
+			render.SetNameResolver(m.names)
+		}
+		return m, nil
 
 	case acctMsg:
 		m.acct = msg.acct
@@ -732,6 +769,47 @@ func (m *model) fetchJobHistoryCmd(jobID int64, jobName, partition string) tea.C
 	}
 }
 
+type namesMsg struct {
+	queried  []string
+	resolved map[string]string
+	err      error
+}
+
+// fetchNamesCmd shells out to `getent passwd <lanid1> <lanid2> ...` in a
+// single batched call and parses the GECOS field's first comma-separated
+// token as the display name. Runs off the render path; the result lands as a
+// namesMsg and is merged into m.names in Update.
+func (m *model) fetchNamesCmd(lanids []string) tea.Cmd {
+	if len(lanids) == 0 {
+		return nil
+	}
+	ids := append([]string(nil), lanids...)
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		args := append([]string{"passwd"}, ids...)
+		out, err := exec.CommandContext(ctx, "getent", args...).Output()
+		if err != nil {
+			return namesMsg{queried: ids, err: err}
+		}
+		resolved := map[string]string{}
+		for _, line := range strings.Split(string(out), "\n") {
+			if line == "" {
+				continue
+			}
+			// passwd format: name:passwd:uid:gid:GECOS:home:shell
+			fields := strings.SplitN(line, ":", 7)
+			if len(fields) < 5 {
+				continue
+			}
+			if name := render.ParseGECOSName(fields[4]); name != "" {
+				resolved[fields[0]] = name
+			}
+		}
+		return namesMsg{queried: ids, resolved: resolved}
+	}
+}
+
 func (m *model) fetchClusterCmd() tea.Cmd {
 	c := m.client
 	return func() tea.Msg {
@@ -889,7 +967,7 @@ func (m *model) maybeOpenConfirmCancel() {
 		return
 	}
 	if me := currentUser(); user != me {
-		m.cancelFlash = fmt.Sprintf("refused: job %d belongs to %s, not %s", id, user, me)
+		m.cancelFlash = fmt.Sprintf("refused: job %d belongs to %s, not %s", id, render.LookupName(user), render.LookupName(me))
 		m.cancelFlashErr = true
 		return
 	}
@@ -922,7 +1000,7 @@ func (m *model) openConfirmBulkCancel() {
 		ok = append(ok, id)
 	}
 	if len(refused) > 0 {
-		m.cancelFlash = fmt.Sprintf("refused: %d selected job(s) not owned by %s", len(refused), me)
+		m.cancelFlash = fmt.Sprintf("refused: %d selected job(s) not owned by %s", len(refused), render.LookupName(me))
 		m.cancelFlashErr = true
 	}
 	if len(ok) == 0 {
@@ -931,6 +1009,39 @@ func (m *model) openConfirmBulkCancel() {
 	}
 	m.bulkCancelIDs = ok
 	m.confirmMode = true
+}
+
+// enqueueNameFetches diffs the lanids in the latest jobsMsg (plus the current
+// user, so the You card gets a name even when they have no jobs) against
+// namesFetchedFor and returns a fetchNamesCmd for anything new. Returns nil
+// when there's nothing to fetch or getent has already failed once.
+func (m *model) enqueueNameFetches(jobs []slurm.Job) tea.Cmd {
+	if m.namesGetentBroken {
+		return nil
+	}
+	if m.namesFetchedFor == nil {
+		m.namesFetchedFor = map[string]struct{}{}
+	}
+	seen := map[string]bool{}
+	var toFetch []string
+	add := func(id string) {
+		if id == "" || seen[id] {
+			return
+		}
+		seen[id] = true
+		if _, done := m.namesFetchedFor[id]; done {
+			return
+		}
+		toFetch = append(toFetch, id)
+	}
+	add(currentUser())
+	for _, j := range jobs {
+		add(j.User)
+	}
+	if len(toFetch) == 0 {
+		return nil
+	}
+	return m.fetchNamesCmd(toFetch)
 }
 
 // maybeFinishLoading flips m.loading off once both nodes and jobs have landed,
@@ -1138,7 +1249,7 @@ func (m *model) renderConfirmCancel(maxHeight int) string {
 		lines = append(lines,
 			helpTitleStyle.Render(fmt.Sprintf("Cancel job %d?", m.confirmCancelID)),
 			"",
-			fmt.Sprintf("  %s  %s", render.ColorFaint("user:"), m.confirmCancelOwner),
+			fmt.Sprintf("  %s  %s", render.ColorFaint("user:"), render.LookupNameFull(m.confirmCancelOwner)),
 			fmt.Sprintf("  %s  %s", render.ColorFaint("name:"), m.confirmCancelName),
 		)
 	}
@@ -1413,7 +1524,7 @@ func (m *model) openDetail() tea.Cmd {
 	case tabJobs:
 		if cur < len(m.lastJobs) {
 			j := m.lastJobs[cur]
-			m.detailTitle = fmt.Sprintf("Job %d  %s / %s", j.JobID, j.User, j.Name)
+			m.detailTitle = fmt.Sprintf("Job %d  %s / %s", j.JobID, render.LookupNameFull(j.User), j.Name)
 			m.detailBody = renderJobDetail(j)
 			m.detailJobID = j.JobID
 			m.detailLogs = nil
@@ -1423,7 +1534,7 @@ func (m *model) openDetail() tea.Cmd {
 	case tabUsers:
 		if cur < len(m.lastUsers) {
 			u := m.lastUsers[cur]
-			m.detailTitle = "User " + u.User
+			m.detailTitle = "User " + render.LookupNameFull(u.User)
 			m.detailBody = renderUserDetail(u)
 			m.detailOpen = true
 		}
@@ -1437,7 +1548,7 @@ func (m *model) openDetail() tea.Cmd {
 	case tabQueue:
 		if cur < len(m.lastQueue) {
 			q := m.lastQueue[cur]
-			m.detailTitle = fmt.Sprintf("Pending job %d  %s / %s", q.JobID, q.User, q.Name)
+			m.detailTitle = fmt.Sprintf("Pending job %d  %s / %s", q.JobID, render.LookupNameFull(q.User), q.Name)
 			m.detailBody = renderQueueDetail(q)
 			m.detailJobID = q.JobID
 			m.detailLogs = nil
@@ -1447,7 +1558,9 @@ func (m *model) openDetail() tea.Cmd {
 	case tabHistory:
 		if cur < len(m.lastHistory) {
 			h := m.lastHistory[cur]
-			m.detailTitle = "History  " + h.Key
+			// TUI's History tab always groups by user (renderTabBody passes
+			// "user" as keyHeader) so h.Key is a lanid.
+			m.detailTitle = "History  " + render.LookupNameFull(h.Key)
 			m.detailBody = renderHistoryDetail(h)
 			m.detailOpen = true
 		}
@@ -1901,6 +2014,7 @@ func (m *model) renderHelp(maxHeight int) string {
 		"  " + helpKeyStyle.Render("s") + "           cycle sort key (jobs, users, queue)",
 		"  " + helpKeyStyle.Render("/") + "           filter rows (name/user/reason)",
 		"  " + helpKeyStyle.Render("m") + "           toggle Me mode (your jobs only)",
+		"  " + helpKeyStyle.Render("n") + "           toggle real names (getent) vs lanids",
 		"  " + helpKeyStyle.Render("p / P") + "       cycle partition focus (forward / back)",
 		"  " + helpKeyStyle.Render("enter") + "       open detail for the selected row",
 		"  " + helpKeyStyle.Render("space") + "       toggle row selection (jobs/queue)",
@@ -1971,6 +2085,8 @@ func (m *model) renderClusterStrip() string {
 	user := currentUser()
 	if user == "" {
 		user = "?"
+	} else {
+		user = render.LookupName(user)
 	}
 	// Avoid Date.Now() in production code paths if anyone reuses this in
 	// snapshot mode — use lastFetch when present, falling back to a literal.
@@ -2319,7 +2435,7 @@ func (m *model) renderFooter() string {
 	} else if !m.lastFetch.IsZero() {
 		status = fmt.Sprintf("last update %s", m.lastFetch.Format("15:04:05"))
 	}
-	help := "? help · q · r refresh · tab · 1-7 · s sort · / filter · m me · p partition · space select · c cancel"
+	help := "? help · q · r refresh · tab · 1-7 · s sort · / filter · m me · n names · p partition · space select · c cancel"
 	if m.arrayDrill != 0 {
 		help = "↩ array " + fmt.Sprintf("%d_*", m.arrayDrill) + " (esc back) · " + help
 	}

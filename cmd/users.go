@@ -40,6 +40,11 @@ in that case this view will only show yourself. Ask an admin for cluster-wide vi
 		if flagJSON {
 			return render.JSON(os.Stdout, rows)
 		}
+		lanids := make([]string, len(rows))
+		for i, r := range rows {
+			lanids[i] = r.User
+		}
+		render.PrewarmNames(lanids)
 		render.RenderUsers(os.Stdout, rows)
 		return nil
 	},

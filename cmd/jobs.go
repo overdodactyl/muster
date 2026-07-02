@@ -41,6 +41,11 @@ and how long it's been running. Use --all to include pending jobs.`,
 		if flagJSON {
 			return render.JSON(os.Stdout, rows)
 		}
+		lanids := make([]string, len(rows))
+		for i, r := range rows {
+			lanids[i] = r.User
+		}
+		render.PrewarmNames(lanids)
 		render.RenderJobs(os.Stdout, rows)
 		return nil
 	},

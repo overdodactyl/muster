@@ -214,7 +214,7 @@ func RenderUsers(w io.Writer, rows []aggregate.UserRollup) {
 	t := newTable(w, []string{"USER", "RUN", "PEND", "CPUS", "GPUS", "MEM", "OLDEST RUN"})
 	for _, r := range rows {
 		t.AppendRow(table.Row{
-			ColorCyan(r.User),
+			ColorCyan(LookupName(r.User)),
 			r.Running,
 			r.Pending,
 			r.CPUsHeld,
@@ -251,7 +251,7 @@ func RenderUsage(w io.Writer, rows []aggregate.UsageRow) {
 				r.WorstJobID, r.WorstJobEff, truncate(r.WorstJobName, 22))
 		}
 		t.AppendRow(table.Row{
-			ColorCyan(r.User),
+			ColorCyan(LookupName(r.User)),
 			r.Jobs,
 			fmt.Sprintf("%.1f", r.CPUHoursReq),
 			fmt.Sprintf("%.1f", r.CPUHoursUsed),
@@ -282,7 +282,7 @@ func RenderGPUs(w io.Writer, rows []aggregate.GPURow) {
 		runtime := ColorFaint("-")
 		if r.InUse {
 			state = ColorRed("in use")
-			user = ColorCyan(r.User)
+			user = ColorCyan(LookupName(r.User))
 			job = fmt.Sprintf("%s (%d)", truncate(r.JobName, 20), r.JobID)
 			runtime = HumanDuration(r.Runtime)
 		}
@@ -387,7 +387,7 @@ func RenderJobs(w io.Writer, rows []aggregate.JobRow) {
 		}
 		t.AppendRow(table.Row{
 			formatRowMarker(r.IsSelected, r.IsNew) + jobIDStr,
-			ColorCyan(r.User),
+			ColorCyan(LookupName(r.User)),
 			truncate(r.Name, 28),
 			r.Partition,
 			state,
@@ -502,7 +502,7 @@ func RenderQueue(w io.Writer, rows []aggregate.QueueRow) {
 		}
 		t.AppendRow(table.Row{
 			formatRowMarker(r.IsSelected, r.IsNew) + jobIDStr,
-			ColorCyan(r.User),
+			ColorCyan(LookupName(r.User)),
 			truncate(r.Name, 24),
 			r.CPUs,
 			gpu,
@@ -539,8 +539,12 @@ func RenderHistory(w io.Writer, rows []aggregate.HistoryRow, keyHeader, subtitle
 		if r.Timeout > 0 {
 			to = ColorRed(to)
 		}
+		key := r.Key
+		if strings.EqualFold(keyHeader, "user") {
+			key = LookupName(r.Key)
+		}
 		t.AppendRow(table.Row{
-			ColorCyan(r.Key),
+			ColorCyan(key),
 			r.Jobs,
 			r.Completed,
 			fail,

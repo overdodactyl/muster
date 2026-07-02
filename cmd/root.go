@@ -19,6 +19,7 @@ var (
 	flagUser      string
 	flagCluster   string
 	flagTheme     string
+	flagNames     bool
 )
 
 var rootCmd = &cobra.Command{
@@ -49,6 +50,7 @@ insight with reason codes explained, and recent sacct history.`,
 				render.SetTheme(render.ThemeDark)
 			}
 		}
+		render.SetNames(flagNames)
 		// Cap table width to the terminal so narrow shells don't break the
 		// layout. Skip when output isn't a TTY (piping); go-pretty's default
 		// is fine there.
@@ -67,6 +69,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVarP(&flagUser, "user", "u", "", "filter to a single user (where applicable)")
 	rootCmd.PersistentFlags().StringVar(&flagCluster, "cluster", "", "Slurm cluster name (passed to -M); v1 supports a single cluster")
 	rootCmd.PersistentFlags().StringVar(&flagTheme, "theme", "dark", "color theme: dark | light | auto (auto reads $COLORFGBG)")
+	rootCmd.PersistentFlags().BoolVar(&flagNames, "names", false, "resolve lanids to real names via getent (dash: toggle with 'n')")
 }
 
 // parseColorFGBG splits the rxvt-style "fg;bg" env value into ints. Returns

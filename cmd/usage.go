@@ -47,6 +47,11 @@ sacct visibility: non-admin users only see their own jobs.`,
 		if flagJSON {
 			return render.JSON(os.Stdout, rows)
 		}
+		lanids := make([]string, len(rows))
+		for i, r := range rows {
+			lanids[i] = r.User
+		}
+		render.PrewarmNames(lanids)
 		render.RenderUsage(os.Stdout, rows)
 		return nil
 	},

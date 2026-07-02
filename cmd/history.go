@@ -57,6 +57,13 @@ Long windows are slow - default is 24h.`,
 			subtitle = "partition " + flagPartition + " · " + subtitle
 		}
 		subtitle += "   (sacct shows only jobs visible to you)"
+		if histBy == "user" {
+			lanids := make([]string, len(rows))
+			for i, r := range rows {
+				lanids[i] = r.Key
+			}
+			render.PrewarmNames(lanids)
+		}
 		render.RenderHistory(os.Stdout, rows, histBy, subtitle)
 		return nil
 	},
