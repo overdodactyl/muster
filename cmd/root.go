@@ -20,6 +20,7 @@ var (
 	flagCluster   string
 	flagTheme     string
 	flagNames     bool
+	flagFixtures  string
 )
 
 var rootCmd = &cobra.Command{
@@ -70,6 +71,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&flagCluster, "cluster", "", "Slurm cluster name (passed to -M); v1 supports a single cluster")
 	rootCmd.PersistentFlags().StringVar(&flagTheme, "theme", "dark", "color theme: dark | light | auto (auto reads $COLORFGBG)")
 	rootCmd.PersistentFlags().BoolVar(&flagNames, "names", false, "resolve lanids to real names via getent (dash: toggle with 'n')")
+	rootCmd.PersistentFlags().StringVar(&flagFixtures, "fixtures", "", "read Slurm --json from this directory instead of shelling out (env: MUSTER_FIXTURES) — useful for demos and screenshots")
 }
 
 // parseColorFGBG splits the rxvt-style "fg;bg" env value into ints. Returns

@@ -1,0 +1,921 @@
+{
+  "jobs": [
+    {
+      "job_id": 9310042,
+      "user_name": "alice",
+      "account": "labA",
+      "name": "stable-diffusion-train",
+      "partition": "gpu",
+      "job_state": [
+        "RUNNING"
+      ],
+      "state_reason": "None",
+      "nodes": "node006a",
+      "node_count": {
+        "set": true,
+        "infinite": false,
+        "number": 1
+      },
+      "cpus": {
+        "set": true,
+        "infinite": false,
+        "number": 24
+      },
+      "memory_per_cpu": {
+        "set": true,
+        "infinite": false,
+        "number": 0
+      },
+      "memory_per_node": {
+        "set": true,
+        "infinite": false,
+        "number": 200000
+      },
+      "tres_per_node": "gres/gpu:2",
+      "submit_time": {
+        "set": true,
+        "infinite": false,
+        "number": 1783854800
+      },
+      "start_time": {
+        "set": true,
+        "infinite": false,
+        "number": 1783855400
+      },
+      "end_time": {
+        "set": true,
+        "infinite": false,
+        "number": 0
+      },
+      "priority": {
+        "set": true,
+        "infinite": false,
+        "number": 5200
+      },
+      "time_limit": {
+        "set": true,
+        "infinite": false,
+        "number": 1440
+      },
+      "gres_detail": [
+        "gpu:a100:2(IDX:0-1)"
+      ]
+    },
+    {
+      "job_id": 9310058,
+      "user_name": "carol",
+      "account": "labC",
+      "name": "resnet50-hparam",
+      "partition": "gpu",
+      "job_state": [
+        "RUNNING"
+      ],
+      "state_reason": "None",
+      "nodes": "node006a",
+      "node_count": {
+        "set": true,
+        "infinite": false,
+        "number": 1
+      },
+      "cpus": {
+        "set": true,
+        "infinite": false,
+        "number": 8
+      },
+      "memory_per_cpu": {
+        "set": true,
+        "infinite": false,
+        "number": 0
+      },
+      "memory_per_node": {
+        "set": true,
+        "infinite": false,
+        "number": 64000
+      },
+      "tres_per_node": "gres/gpu:1",
+      "submit_time": {
+        "set": true,
+        "infinite": false,
+        "number": 1783867760
+      },
+      "start_time": {
+        "set": true,
+        "infinite": false,
+        "number": 1783868000
+      },
+      "end_time": {
+        "set": true,
+        "infinite": false,
+        "number": 0
+      },
+      "priority": {
+        "set": true,
+        "infinite": false,
+        "number": 3100
+      },
+      "time_limit": {
+        "set": true,
+        "infinite": false,
+        "number": 720
+      },
+      "gres_detail": [
+        "gpu:a100:1(IDX:2)"
+      ]
+    },
+    {
+      "job_id": 9310071,
+      "user_name": "bob",
+      "account": "labB",
+      "name": "qc-pipeline",
+      "partition": "cpu",
+      "job_state": [
+        "RUNNING"
+      ],
+      "state_reason": "None",
+      "nodes": "node002a",
+      "node_count": {
+        "set": true,
+        "infinite": false,
+        "number": 1
+      },
+      "cpus": {
+        "set": true,
+        "infinite": false,
+        "number": 32
+      },
+      "memory_per_cpu": {
+        "set": true,
+        "infinite": false,
+        "number": 0
+      },
+      "memory_per_node": {
+        "set": true,
+        "infinite": false,
+        "number": 64000
+      },
+      "tres_per_node": "",
+      "submit_time": {
+        "set": true,
+        "infinite": false,
+        "number": 1783617800
+      },
+      "start_time": {
+        "set": true,
+        "infinite": false,
+        "number": 1783618100
+      },
+      "end_time": {
+        "set": true,
+        "infinite": false,
+        "number": 0
+      },
+      "priority": {
+        "set": true,
+        "infinite": false,
+        "number": 1400
+      },
+      "time_limit": {
+        "set": true,
+        "infinite": false,
+        "number": 10080
+      }
+    },
+    {
+      "job_id": 9310089,
+      "user_name": "dave",
+      "account": "labB",
+      "name": "fastqc-batch",
+      "partition": "cpu",
+      "job_state": [
+        "RUNNING"
+      ],
+      "state_reason": "None",
+      "nodes": "node003a",
+      "node_count": {
+        "set": true,
+        "infinite": false,
+        "number": 1
+      },
+      "cpus": {
+        "set": true,
+        "infinite": false,
+        "number": 16
+      },
+      "memory_per_cpu": {
+        "set": true,
+        "infinite": false,
+        "number": 0
+      },
+      "memory_per_node": {
+        "set": true,
+        "infinite": false,
+        "number": 32000
+      },
+      "tres_per_node": "",
+      "submit_time": {
+        "set": true,
+        "infinite": false,
+        "number": 1783862600
+      },
+      "start_time": {
+        "set": true,
+        "infinite": false,
+        "number": 1783862720
+      },
+      "end_time": {
+        "set": true,
+        "infinite": false,
+        "number": 0
+      },
+      "priority": {
+        "set": true,
+        "infinite": false,
+        "number": 2000
+      },
+      "time_limit": {
+        "set": true,
+        "infinite": false,
+        "number": 480
+      }
+    },
+    {
+      "job_id": 9310110,
+      "user_name": "eve",
+      "account": "labA",
+      "name": "bootstrap-sample",
+      "partition": "cpu",
+      "job_state": [
+        "RUNNING"
+      ],
+      "state_reason": "None",
+      "nodes": "node007a",
+      "node_count": {
+        "set": true,
+        "infinite": false,
+        "number": 1
+      },
+      "cpus": {
+        "set": true,
+        "infinite": false,
+        "number": 8
+      },
+      "memory_per_cpu": {
+        "set": true,
+        "infinite": false,
+        "number": 0
+      },
+      "memory_per_node": {
+        "set": true,
+        "infinite": false,
+        "number": 16000
+      },
+      "tres_per_node": "",
+      "submit_time": {
+        "set": true,
+        "infinite": false,
+        "number": 1783871600
+      },
+      "start_time": {
+        "set": true,
+        "infinite": false,
+        "number": 1783871720
+      },
+      "end_time": {
+        "set": true,
+        "infinite": false,
+        "number": 0
+      },
+      "priority": {
+        "set": true,
+        "infinite": false,
+        "number": 1800
+      },
+      "time_limit": {
+        "set": true,
+        "infinite": false,
+        "number": 240
+      },
+      "array_job_id": {
+        "set": true,
+        "infinite": false,
+        "number": 9310110
+      },
+      "array_task_id": {
+        "set": true,
+        "infinite": false,
+        "number": 0
+      }
+    },
+    {
+      "job_id": 9310111,
+      "user_name": "eve",
+      "account": "labA",
+      "name": "bootstrap-sample",
+      "partition": "cpu",
+      "job_state": [
+        "RUNNING"
+      ],
+      "state_reason": "None",
+      "nodes": "node007a",
+      "node_count": {
+        "set": true,
+        "infinite": false,
+        "number": 1
+      },
+      "cpus": {
+        "set": true,
+        "infinite": false,
+        "number": 8
+      },
+      "memory_per_cpu": {
+        "set": true,
+        "infinite": false,
+        "number": 0
+      },
+      "memory_per_node": {
+        "set": true,
+        "infinite": false,
+        "number": 16000
+      },
+      "tres_per_node": "",
+      "submit_time": {
+        "set": true,
+        "infinite": false,
+        "number": 1783871600
+      },
+      "start_time": {
+        "set": true,
+        "infinite": false,
+        "number": 1783871720
+      },
+      "end_time": {
+        "set": true,
+        "infinite": false,
+        "number": 0
+      },
+      "priority": {
+        "set": true,
+        "infinite": false,
+        "number": 1800
+      },
+      "time_limit": {
+        "set": true,
+        "infinite": false,
+        "number": 240
+      },
+      "array_job_id": {
+        "set": true,
+        "infinite": false,
+        "number": 9310110
+      },
+      "array_task_id": {
+        "set": true,
+        "infinite": false,
+        "number": 1
+      }
+    },
+    {
+      "job_id": 9310112,
+      "user_name": "eve",
+      "account": "labA",
+      "name": "bootstrap-sample",
+      "partition": "cpu",
+      "job_state": [
+        "RUNNING"
+      ],
+      "state_reason": "None",
+      "nodes": "node0012a",
+      "node_count": {
+        "set": true,
+        "infinite": false,
+        "number": 1
+      },
+      "cpus": {
+        "set": true,
+        "infinite": false,
+        "number": 8
+      },
+      "memory_per_cpu": {
+        "set": true,
+        "infinite": false,
+        "number": 0
+      },
+      "memory_per_node": {
+        "set": true,
+        "infinite": false,
+        "number": 16000
+      },
+      "tres_per_node": "",
+      "submit_time": {
+        "set": true,
+        "infinite": false,
+        "number": 1783871600
+      },
+      "start_time": {
+        "set": true,
+        "infinite": false,
+        "number": 1783871720
+      },
+      "end_time": {
+        "set": true,
+        "infinite": false,
+        "number": 0
+      },
+      "priority": {
+        "set": true,
+        "infinite": false,
+        "number": 1800
+      },
+      "time_limit": {
+        "set": true,
+        "infinite": false,
+        "number": 240
+      },
+      "array_job_id": {
+        "set": true,
+        "infinite": false,
+        "number": 9310110
+      },
+      "array_task_id": {
+        "set": true,
+        "infinite": false,
+        "number": 2
+      }
+    },
+    {
+      "job_id": 9310113,
+      "user_name": "eve",
+      "account": "labA",
+      "name": "bootstrap-sample",
+      "partition": "cpu",
+      "job_state": [
+        "PENDING"
+      ],
+      "state_reason": "Resources",
+      "nodes": "",
+      "node_count": {
+        "set": true,
+        "infinite": false,
+        "number": 1
+      },
+      "cpus": {
+        "set": true,
+        "infinite": false,
+        "number": 8
+      },
+      "memory_per_cpu": {
+        "set": true,
+        "infinite": false,
+        "number": 0
+      },
+      "memory_per_node": {
+        "set": true,
+        "infinite": false,
+        "number": 16000
+      },
+      "tres_per_node": "",
+      "submit_time": {
+        "set": true,
+        "infinite": false,
+        "number": 1783871600
+      },
+      "start_time": {
+        "set": true,
+        "infinite": false,
+        "number": 0
+      },
+      "end_time": {
+        "set": true,
+        "infinite": false,
+        "number": 0
+      },
+      "priority": {
+        "set": true,
+        "infinite": false,
+        "number": 1800
+      },
+      "time_limit": {
+        "set": true,
+        "infinite": false,
+        "number": 240
+      },
+      "array_job_id": {
+        "set": true,
+        "infinite": false,
+        "number": 9310110
+      },
+      "array_task_id": {
+        "set": true,
+        "infinite": false,
+        "number": 3
+      }
+    },
+    {
+      "job_id": 9310128,
+      "user_name": "frank",
+      "account": "labC",
+      "name": "interactive",
+      "partition": "gpu",
+      "job_state": [
+        "RUNNING"
+      ],
+      "state_reason": "None",
+      "nodes": "node013a",
+      "node_count": {
+        "set": true,
+        "infinite": false,
+        "number": 1
+      },
+      "cpus": {
+        "set": true,
+        "infinite": false,
+        "number": 4
+      },
+      "memory_per_cpu": {
+        "set": true,
+        "infinite": false,
+        "number": 0
+      },
+      "memory_per_node": {
+        "set": true,
+        "infinite": false,
+        "number": 16000
+      },
+      "tres_per_node": "gres/gpu:0",
+      "submit_time": {
+        "set": true,
+        "infinite": false,
+        "number": 1783874300
+      },
+      "start_time": {
+        "set": true,
+        "infinite": false,
+        "number": 1783874360
+      },
+      "end_time": {
+        "set": true,
+        "infinite": false,
+        "number": 0
+      },
+      "priority": {
+        "set": true,
+        "infinite": false,
+        "number": 2500
+      },
+      "time_limit": {
+        "set": true,
+        "infinite": false,
+        "number": 360
+      }
+    },
+    {
+      "job_id": 9310140,
+      "user_name": "alice",
+      "account": "labA",
+      "name": "finetune-lora",
+      "partition": "gpu",
+      "job_state": [
+        "PENDING"
+      ],
+      "state_reason": "Priority",
+      "nodes": "",
+      "node_count": {
+        "set": true,
+        "infinite": false,
+        "number": 1
+      },
+      "cpus": {
+        "set": true,
+        "infinite": false,
+        "number": 16
+      },
+      "memory_per_cpu": {
+        "set": true,
+        "infinite": false,
+        "number": 0
+      },
+      "memory_per_node": {
+        "set": true,
+        "infinite": false,
+        "number": 128000
+      },
+      "tres_per_node": "gres/gpu:2",
+      "submit_time": {
+        "set": true,
+        "infinite": false,
+        "number": 1783875800
+      },
+      "start_time": {
+        "set": true,
+        "infinite": false,
+        "number": 0
+      },
+      "end_time": {
+        "set": true,
+        "infinite": false,
+        "number": 0
+      },
+      "priority": {
+        "set": true,
+        "infinite": false,
+        "number": 5000
+      },
+      "time_limit": {
+        "set": true,
+        "infinite": false,
+        "number": 360
+      }
+    },
+    {
+      "job_id": 9310142,
+      "user_name": "grace",
+      "account": "labD",
+      "name": "big-inference",
+      "partition": "gpu",
+      "job_state": [
+        "PENDING"
+      ],
+      "state_reason": "Resources",
+      "nodes": "",
+      "node_count": {
+        "set": true,
+        "infinite": false,
+        "number": 1
+      },
+      "cpus": {
+        "set": true,
+        "infinite": false,
+        "number": 24
+      },
+      "memory_per_cpu": {
+        "set": true,
+        "infinite": false,
+        "number": 0
+      },
+      "memory_per_node": {
+        "set": true,
+        "infinite": false,
+        "number": 200000
+      },
+      "tres_per_node": "gres/gpu:4",
+      "submit_time": {
+        "set": true,
+        "infinite": false,
+        "number": 1783876100
+      },
+      "start_time": {
+        "set": true,
+        "infinite": false,
+        "number": 0
+      },
+      "end_time": {
+        "set": true,
+        "infinite": false,
+        "number": 0
+      },
+      "priority": {
+        "set": true,
+        "infinite": false,
+        "number": 4200
+      },
+      "time_limit": {
+        "set": true,
+        "infinite": false,
+        "number": 120
+      }
+    },
+    {
+      "job_id": 9310144,
+      "user_name": "alice",
+      "account": "labA",
+      "name": "eval-lora",
+      "partition": "gpu",
+      "job_state": [
+        "PENDING"
+      ],
+      "state_reason": "Dependency",
+      "nodes": "",
+      "node_count": {
+        "set": true,
+        "infinite": false,
+        "number": 1
+      },
+      "cpus": {
+        "set": true,
+        "infinite": false,
+        "number": 4
+      },
+      "memory_per_cpu": {
+        "set": true,
+        "infinite": false,
+        "number": 0
+      },
+      "memory_per_node": {
+        "set": true,
+        "infinite": false,
+        "number": 32000
+      },
+      "tres_per_node": "gres/gpu:1",
+      "submit_time": {
+        "set": true,
+        "infinite": false,
+        "number": 1783875860
+      },
+      "start_time": {
+        "set": true,
+        "infinite": false,
+        "number": 0
+      },
+      "end_time": {
+        "set": true,
+        "infinite": false,
+        "number": 0
+      },
+      "priority": {
+        "set": true,
+        "infinite": false,
+        "number": 5100
+      },
+      "time_limit": {
+        "set": true,
+        "infinite": false,
+        "number": 60
+      },
+      "dependency": "afterok:9310042"
+    },
+    {
+      "job_id": 9310146,
+      "user_name": "dave",
+      "account": "labB",
+      "name": "l40-benchmark",
+      "partition": "ml",
+      "job_state": [
+        "PENDING"
+      ],
+      "state_reason": "ReqNodeNotAvail",
+      "nodes": "",
+      "node_count": {
+        "set": true,
+        "infinite": false,
+        "number": 1
+      },
+      "cpus": {
+        "set": true,
+        "infinite": false,
+        "number": 12
+      },
+      "memory_per_cpu": {
+        "set": true,
+        "infinite": false,
+        "number": 0
+      },
+      "memory_per_node": {
+        "set": true,
+        "infinite": false,
+        "number": 48000
+      },
+      "tres_per_node": "gres/gpu:2",
+      "submit_time": {
+        "set": true,
+        "infinite": false,
+        "number": 1783876520
+      },
+      "start_time": {
+        "set": true,
+        "infinite": false,
+        "number": 0
+      },
+      "end_time": {
+        "set": true,
+        "infinite": false,
+        "number": 0
+      },
+      "priority": {
+        "set": true,
+        "infinite": false,
+        "number": 1500
+      },
+      "time_limit": {
+        "set": true,
+        "infinite": false,
+        "number": 180
+      }
+    },
+    {
+      "job_id": 9310147,
+      "user_name": "bob",
+      "account": "labB",
+      "name": "align-cohort",
+      "partition": "cpu",
+      "job_state": [
+        "PENDING"
+      ],
+      "state_reason": "Priority",
+      "nodes": "",
+      "node_count": {
+        "set": true,
+        "infinite": false,
+        "number": 1
+      },
+      "cpus": {
+        "set": true,
+        "infinite": false,
+        "number": 64
+      },
+      "memory_per_cpu": {
+        "set": true,
+        "infinite": false,
+        "number": 0
+      },
+      "memory_per_node": {
+        "set": true,
+        "infinite": false,
+        "number": 256000
+      },
+      "tres_per_node": "",
+      "submit_time": {
+        "set": true,
+        "infinite": false,
+        "number": 1783876700
+      },
+      "start_time": {
+        "set": true,
+        "infinite": false,
+        "number": 0
+      },
+      "end_time": {
+        "set": true,
+        "infinite": false,
+        "number": 0
+      },
+      "priority": {
+        "set": true,
+        "infinite": false,
+        "number": 1300
+      },
+      "time_limit": {
+        "set": true,
+        "infinite": false,
+        "number": 720
+      }
+    },
+    {
+      "job_id": 9310148,
+      "user_name": "grace",
+      "account": "labD",
+      "name": "nightly-scan",
+      "partition": "cpu",
+      "job_state": [
+        "PENDING"
+      ],
+      "state_reason": "BeginTime",
+      "nodes": "",
+      "node_count": {
+        "set": true,
+        "infinite": false,
+        "number": 1
+      },
+      "cpus": {
+        "set": true,
+        "infinite": false,
+        "number": 32
+      },
+      "memory_per_cpu": {
+        "set": true,
+        "infinite": false,
+        "number": 0
+      },
+      "memory_per_node": {
+        "set": true,
+        "infinite": false,
+        "number": 64000
+      },
+      "tres_per_node": "",
+      "submit_time": {
+        "set": true,
+        "infinite": false,
+        "number": 1783876880
+      },
+      "start_time": {
+        "set": true,
+        "infinite": false,
+        "number": 1783898600
+      },
+      "end_time": {
+        "set": true,
+        "infinite": false,
+        "number": 0
+      },
+      "priority": {
+        "set": true,
+        "infinite": false,
+        "number": 800
+      },
+      "time_limit": {
+        "set": true,
+        "infinite": false,
+        "number": 240
+      }
+    }
+  ]
+}

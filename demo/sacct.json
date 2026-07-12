@@ -1,0 +1,1204 @@
+{
+  "jobs": [
+    {
+      "job_id": 9309000,
+      "name": "stable-diffusion-train",
+      "user": "alice",
+      "account": "labA",
+      "partition": "gpu",
+      "state": {
+        "current": [
+          "COMPLETED"
+        ],
+        "reason": ""
+      },
+      "time": {
+        "submission": 1783704180,
+        "start": 1783704200,
+        "end": 1783873400,
+        "elapsed": 169200,
+        "total": {
+          "seconds": 2923776,
+          "microseconds": 0
+        }
+      },
+      "exit_code": {
+        "return_code": {
+          "set": true,
+          "infinite": false,
+          "number": 0
+        }
+      },
+      "tres": {
+        "allocated": [
+          {
+            "type": "cpu",
+            "name": "",
+            "count": {
+              "set": true,
+              "infinite": false,
+              "number": 24
+            }
+          },
+          {
+            "type": "mem",
+            "name": "",
+            "count": {
+              "set": true,
+              "infinite": false,
+              "number": 200000
+            }
+          },
+          {
+            "type": "gres",
+            "name": "gpu",
+            "count": {
+              "set": true,
+              "infinite": false,
+              "number": 2
+            }
+          }
+        ]
+      }
+    },
+    {
+      "job_id": 9309001,
+      "name": "resnet50-hparam",
+      "user": "carol",
+      "account": "labC",
+      "partition": "gpu",
+      "state": {
+        "current": [
+          "COMPLETED"
+        ],
+        "reason": ""
+      },
+      "time": {
+        "submission": 1783819380,
+        "start": 1783819400,
+        "end": 1783862600,
+        "elapsed": 43200,
+        "total": {
+          "seconds": 248832,
+          "microseconds": 0
+        }
+      },
+      "exit_code": {
+        "return_code": {
+          "set": true,
+          "infinite": false,
+          "number": 0
+        }
+      },
+      "tres": {
+        "allocated": [
+          {
+            "type": "cpu",
+            "name": "",
+            "count": {
+              "set": true,
+              "infinite": false,
+              "number": 8
+            }
+          },
+          {
+            "type": "mem",
+            "name": "",
+            "count": {
+              "set": true,
+              "infinite": false,
+              "number": 64000
+            }
+          },
+          {
+            "type": "gres",
+            "name": "gpu",
+            "count": {
+              "set": true,
+              "infinite": false,
+              "number": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "job_id": 9309002,
+      "name": "resnet50-hparam",
+      "user": "carol",
+      "account": "labC",
+      "partition": "gpu",
+      "state": {
+        "current": [
+          "COMPLETED"
+        ],
+        "reason": ""
+      },
+      "time": {
+        "submission": 1783758180,
+        "start": 1783758200,
+        "end": 1783797800,
+        "elapsed": 39600,
+        "total": {
+          "seconds": 228096,
+          "microseconds": 0
+        }
+      },
+      "exit_code": {
+        "return_code": {
+          "set": true,
+          "infinite": false,
+          "number": 0
+        }
+      },
+      "tres": {
+        "allocated": [
+          {
+            "type": "cpu",
+            "name": "",
+            "count": {
+              "set": true,
+              "infinite": false,
+              "number": 8
+            }
+          },
+          {
+            "type": "mem",
+            "name": "",
+            "count": {
+              "set": true,
+              "infinite": false,
+              "number": 64000
+            }
+          },
+          {
+            "type": "gres",
+            "name": "gpu",
+            "count": {
+              "set": true,
+              "infinite": false,
+              "number": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "job_id": 9309003,
+      "name": "qc-pipeline",
+      "user": "bob",
+      "account": "labB",
+      "partition": "cpu",
+      "state": {
+        "current": [
+          "COMPLETED"
+        ],
+        "reason": ""
+      },
+      "time": {
+        "submission": 1783588980,
+        "start": 1783589000,
+        "end": 1783848200,
+        "elapsed": 259200,
+        "total": {
+          "seconds": 5971968,
+          "microseconds": 0
+        }
+      },
+      "exit_code": {
+        "return_code": {
+          "set": true,
+          "infinite": false,
+          "number": 0
+        }
+      },
+      "tres": {
+        "allocated": [
+          {
+            "type": "cpu",
+            "name": "",
+            "count": {
+              "set": true,
+              "infinite": false,
+              "number": 32
+            }
+          },
+          {
+            "type": "mem",
+            "name": "",
+            "count": {
+              "set": true,
+              "infinite": false,
+              "number": 64000
+            }
+          }
+        ]
+      }
+    },
+    {
+      "job_id": 9309004,
+      "name": "fastqc-batch",
+      "user": "dave",
+      "account": "labB",
+      "partition": "cpu",
+      "state": {
+        "current": [
+          "COMPLETED"
+        ],
+        "reason": ""
+      },
+      "time": {
+        "submission": 1783837380,
+        "start": 1783837400,
+        "end": 1783859000,
+        "elapsed": 21600,
+        "total": {
+          "seconds": 248832,
+          "microseconds": 0
+        }
+      },
+      "exit_code": {
+        "return_code": {
+          "set": true,
+          "infinite": false,
+          "number": 0
+        }
+      },
+      "tres": {
+        "allocated": [
+          {
+            "type": "cpu",
+            "name": "",
+            "count": {
+              "set": true,
+              "infinite": false,
+              "number": 16
+            }
+          },
+          {
+            "type": "mem",
+            "name": "",
+            "count": {
+              "set": true,
+              "infinite": false,
+              "number": 32000
+            }
+          }
+        ]
+      }
+    },
+    {
+      "job_id": 9309005,
+      "name": "bootstrap-sample",
+      "user": "eve",
+      "account": "labA",
+      "partition": "cpu",
+      "state": {
+        "current": [
+          "COMPLETED"
+        ],
+        "reason": ""
+      },
+      "time": {
+        "submission": 1783853580,
+        "start": 1783853600,
+        "end": 1783866200,
+        "elapsed": 12600,
+        "total": {
+          "seconds": 72576,
+          "microseconds": 0
+        }
+      },
+      "exit_code": {
+        "return_code": {
+          "set": true,
+          "infinite": false,
+          "number": 0
+        }
+      },
+      "tres": {
+        "allocated": [
+          {
+            "type": "cpu",
+            "name": "",
+            "count": {
+              "set": true,
+              "infinite": false,
+              "number": 8
+            }
+          },
+          {
+            "type": "mem",
+            "name": "",
+            "count": {
+              "set": true,
+              "infinite": false,
+              "number": 16000
+            }
+          }
+        ]
+      }
+    },
+    {
+      "job_id": 9309006,
+      "name": "bootstrap-sample",
+      "user": "eve",
+      "account": "labA",
+      "partition": "cpu",
+      "state": {
+        "current": [
+          "COMPLETED"
+        ],
+        "reason": ""
+      },
+      "time": {
+        "submission": 1783810500,
+        "start": 1783810520,
+        "end": 1783823000,
+        "elapsed": 12480,
+        "total": {
+          "seconds": 71884,
+          "microseconds": 0
+        }
+      },
+      "exit_code": {
+        "return_code": {
+          "set": true,
+          "infinite": false,
+          "number": 0
+        }
+      },
+      "tres": {
+        "allocated": [
+          {
+            "type": "cpu",
+            "name": "",
+            "count": {
+              "set": true,
+              "infinite": false,
+              "number": 8
+            }
+          },
+          {
+            "type": "mem",
+            "name": "",
+            "count": {
+              "set": true,
+              "infinite": false,
+              "number": 16000
+            }
+          }
+        ]
+      }
+    },
+    {
+      "job_id": 9309007,
+      "name": "l40-benchmark",
+      "user": "dave",
+      "account": "labB",
+      "partition": "ml",
+      "state": {
+        "current": [
+          "COMPLETED"
+        ],
+        "reason": ""
+      },
+      "time": {
+        "submission": 1783864380,
+        "start": 1783864400,
+        "end": 1783869800,
+        "elapsed": 5400,
+        "total": {
+          "seconds": 46656,
+          "microseconds": 0
+        }
+      },
+      "exit_code": {
+        "return_code": {
+          "set": true,
+          "infinite": false,
+          "number": 0
+        }
+      },
+      "tres": {
+        "allocated": [
+          {
+            "type": "cpu",
+            "name": "",
+            "count": {
+              "set": true,
+              "infinite": false,
+              "number": 12
+            }
+          },
+          {
+            "type": "mem",
+            "name": "",
+            "count": {
+              "set": true,
+              "infinite": false,
+              "number": 48000
+            }
+          },
+          {
+            "type": "gres",
+            "name": "gpu",
+            "count": {
+              "set": true,
+              "infinite": false,
+              "number": 2
+            }
+          }
+        ]
+      }
+    },
+    {
+      "job_id": 9309008,
+      "name": "finetune-lora",
+      "user": "alice",
+      "account": "labA",
+      "partition": "gpu",
+      "state": {
+        "current": [
+          "COMPLETED"
+        ],
+        "reason": ""
+      },
+      "time": {
+        "submission": 1783765380,
+        "start": 1783765400,
+        "end": 1783783400,
+        "elapsed": 18000,
+        "total": {
+          "seconds": 207360,
+          "microseconds": 0
+        }
+      },
+      "exit_code": {
+        "return_code": {
+          "set": true,
+          "infinite": false,
+          "number": 0
+        }
+      },
+      "tres": {
+        "allocated": [
+          {
+            "type": "cpu",
+            "name": "",
+            "count": {
+              "set": true,
+              "infinite": false,
+              "number": 16
+            }
+          },
+          {
+            "type": "mem",
+            "name": "",
+            "count": {
+              "set": true,
+              "infinite": false,
+              "number": 128000
+            }
+          },
+          {
+            "type": "gres",
+            "name": "gpu",
+            "count": {
+              "set": true,
+              "infinite": false,
+              "number": 2
+            }
+          }
+        ]
+      }
+    },
+    {
+      "job_id": 9309009,
+      "name": "eval-lora",
+      "user": "alice",
+      "account": "labA",
+      "partition": "gpu",
+      "state": {
+        "current": [
+          "COMPLETED"
+        ],
+        "reason": ""
+      },
+      "time": {
+        "submission": 1783777080,
+        "start": 1783777100,
+        "end": 1783779800,
+        "elapsed": 2700,
+        "total": {
+          "seconds": 7776,
+          "microseconds": 0
+        }
+      },
+      "exit_code": {
+        "return_code": {
+          "set": true,
+          "infinite": false,
+          "number": 0
+        }
+      },
+      "tres": {
+        "allocated": [
+          {
+            "type": "cpu",
+            "name": "",
+            "count": {
+              "set": true,
+              "infinite": false,
+              "number": 4
+            }
+          },
+          {
+            "type": "mem",
+            "name": "",
+            "count": {
+              "set": true,
+              "infinite": false,
+              "number": 32000
+            }
+          },
+          {
+            "type": "gres",
+            "name": "gpu",
+            "count": {
+              "set": true,
+              "infinite": false,
+              "number": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "job_id": 9309010,
+      "name": "interactive",
+      "user": "frank",
+      "account": "labC",
+      "partition": "gpu",
+      "state": {
+        "current": [
+          "COMPLETED"
+        ],
+        "reason": ""
+      },
+      "time": {
+        "submission": 1783822980,
+        "start": 1783823000,
+        "end": 1783833800,
+        "elapsed": 10800,
+        "total": {
+          "seconds": 31104,
+          "microseconds": 0
+        }
+      },
+      "exit_code": {
+        "return_code": {
+          "set": true,
+          "infinite": false,
+          "number": 0
+        }
+      },
+      "tres": {
+        "allocated": [
+          {
+            "type": "cpu",
+            "name": "",
+            "count": {
+              "set": true,
+              "infinite": false,
+              "number": 4
+            }
+          },
+          {
+            "type": "mem",
+            "name": "",
+            "count": {
+              "set": true,
+              "infinite": false,
+              "number": 16000
+            }
+          }
+        ]
+      }
+    },
+    {
+      "job_id": 9309011,
+      "name": "preprocess-cohort",
+      "user": "bob",
+      "account": "labB",
+      "partition": "cpu",
+      "state": {
+        "current": [
+          "FAILED"
+        ],
+        "reason": ""
+      },
+      "time": {
+        "submission": 1783794180,
+        "start": 1783794200,
+        "end": 1783808600,
+        "elapsed": 14400,
+        "total": {
+          "seconds": 165888,
+          "microseconds": 0
+        }
+      },
+      "exit_code": {
+        "return_code": {
+          "set": true,
+          "infinite": false,
+          "number": 2
+        }
+      },
+      "tres": {
+        "allocated": [
+          {
+            "type": "cpu",
+            "name": "",
+            "count": {
+              "set": true,
+              "infinite": false,
+              "number": 16
+            }
+          },
+          {
+            "type": "mem",
+            "name": "",
+            "count": {
+              "set": true,
+              "infinite": false,
+              "number": 32000
+            }
+          }
+        ]
+      }
+    },
+    {
+      "job_id": 9309012,
+      "name": "bad-cli",
+      "user": "grace",
+      "account": "labD",
+      "partition": "cpu",
+      "state": {
+        "current": [
+          "FAILED"
+        ],
+        "reason": ""
+      },
+      "time": {
+        "submission": 1783801320,
+        "start": 1783801340,
+        "end": 1783801400,
+        "elapsed": 60,
+        "total": {
+          "seconds": 345,
+          "microseconds": 0
+        }
+      },
+      "exit_code": {
+        "return_code": {
+          "set": true,
+          "infinite": false,
+          "number": 127
+        }
+      },
+      "tres": {
+        "allocated": [
+          {
+            "type": "cpu",
+            "name": "",
+            "count": {
+              "set": true,
+              "infinite": false,
+              "number": 8
+            }
+          },
+          {
+            "type": "mem",
+            "name": "",
+            "count": {
+              "set": true,
+              "infinite": false,
+              "number": 8000
+            }
+          }
+        ]
+      }
+    },
+    {
+      "job_id": 9309013,
+      "name": "out-of-memory",
+      "user": "dave",
+      "account": "labB",
+      "partition": "cpu",
+      "state": {
+        "current": [
+          "OUT_OF_MEMORY"
+        ],
+        "reason": ""
+      },
+      "time": {
+        "submission": 1783766280,
+        "start": 1783766300,
+        "end": 1783769000,
+        "elapsed": 2700,
+        "total": {
+          "seconds": 31104,
+          "microseconds": 0
+        }
+      },
+      "exit_code": {
+        "return_code": {
+          "set": true,
+          "infinite": false,
+          "number": 137
+        }
+      },
+      "tres": {
+        "allocated": [
+          {
+            "type": "cpu",
+            "name": "",
+            "count": {
+              "set": true,
+              "infinite": false,
+              "number": 16
+            }
+          },
+          {
+            "type": "mem",
+            "name": "",
+            "count": {
+              "set": true,
+              "infinite": false,
+              "number": 16000
+            }
+          }
+        ]
+      }
+    },
+    {
+      "job_id": 9309014,
+      "name": "hparam-search",
+      "user": "carol",
+      "account": "labC",
+      "partition": "gpu",
+      "state": {
+        "current": [
+          "TIMEOUT"
+        ],
+        "reason": ""
+      },
+      "time": {
+        "submission": 1783596180,
+        "start": 1783596200,
+        "end": 1783704200,
+        "elapsed": 108000,
+        "total": {
+          "seconds": 622080,
+          "microseconds": 0
+        }
+      },
+      "exit_code": {
+        "return_code": {
+          "set": true,
+          "infinite": false,
+          "number": 0
+        }
+      },
+      "tres": {
+        "allocated": [
+          {
+            "type": "cpu",
+            "name": "",
+            "count": {
+              "set": true,
+              "infinite": false,
+              "number": 8
+            }
+          },
+          {
+            "type": "mem",
+            "name": "",
+            "count": {
+              "set": true,
+              "infinite": false,
+              "number": 64000
+            }
+          },
+          {
+            "type": "gres",
+            "name": "gpu",
+            "count": {
+              "set": true,
+              "infinite": false,
+              "number": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "job_id": 9309015,
+      "name": "segment-brains",
+      "user": "grace",
+      "account": "labD",
+      "partition": "ml",
+      "state": {
+        "current": [
+          "COMPLETED"
+        ],
+        "reason": ""
+      },
+      "time": {
+        "submission": 1783729380,
+        "start": 1783729400,
+        "end": 1783758200,
+        "elapsed": 28800,
+        "total": {
+          "seconds": 248832,
+          "microseconds": 0
+        }
+      },
+      "exit_code": {
+        "return_code": {
+          "set": true,
+          "infinite": false,
+          "number": 0
+        }
+      },
+      "tres": {
+        "allocated": [
+          {
+            "type": "cpu",
+            "name": "",
+            "count": {
+              "set": true,
+              "infinite": false,
+              "number": 12
+            }
+          },
+          {
+            "type": "mem",
+            "name": "",
+            "count": {
+              "set": true,
+              "infinite": false,
+              "number": 48000
+            }
+          },
+          {
+            "type": "gres",
+            "name": "gpu",
+            "count": {
+              "set": true,
+              "infinite": false,
+              "number": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "job_id": 9309016,
+      "name": "segment-brains",
+      "user": "grace",
+      "account": "labD",
+      "partition": "ml",
+      "state": {
+        "current": [
+          "COMPLETED"
+        ],
+        "reason": ""
+      },
+      "time": {
+        "submission": 1783704180,
+        "start": 1783704200,
+        "end": 1783733000,
+        "elapsed": 28800,
+        "total": {
+          "seconds": 248832,
+          "microseconds": 0
+        }
+      },
+      "exit_code": {
+        "return_code": {
+          "set": true,
+          "infinite": false,
+          "number": 0
+        }
+      },
+      "tres": {
+        "allocated": [
+          {
+            "type": "cpu",
+            "name": "",
+            "count": {
+              "set": true,
+              "infinite": false,
+              "number": 12
+            }
+          },
+          {
+            "type": "mem",
+            "name": "",
+            "count": {
+              "set": true,
+              "infinite": false,
+              "number": 48000
+            }
+          },
+          {
+            "type": "gres",
+            "name": "gpu",
+            "count": {
+              "set": true,
+              "infinite": false,
+              "number": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "job_id": 9309017,
+      "name": "qc-pipeline",
+      "user": "bob",
+      "account": "labB",
+      "partition": "cpu",
+      "state": {
+        "current": [
+          "COMPLETED"
+        ],
+        "reason": ""
+      },
+      "time": {
+        "submission": 1783570980,
+        "start": 1783571000,
+        "end": 1783661000,
+        "elapsed": 90000,
+        "total": {
+          "seconds": 2073600,
+          "microseconds": 0
+        }
+      },
+      "exit_code": {
+        "return_code": {
+          "set": true,
+          "infinite": false,
+          "number": 0
+        }
+      },
+      "tres": {
+        "allocated": [
+          {
+            "type": "cpu",
+            "name": "",
+            "count": {
+              "set": true,
+              "infinite": false,
+              "number": 32
+            }
+          },
+          {
+            "type": "mem",
+            "name": "",
+            "count": {
+              "set": true,
+              "infinite": false,
+              "number": 64000
+            }
+          }
+        ]
+      }
+    },
+    {
+      "job_id": 9309018,
+      "name": "small-test",
+      "user": "frank",
+      "account": "labC",
+      "partition": "gpu",
+      "state": {
+        "current": [
+          "COMPLETED"
+        ],
+        "reason": ""
+      },
+      "time": {
+        "submission": 1783854660,
+        "start": 1783854680,
+        "end": 1783855400,
+        "elapsed": 720,
+        "total": {
+          "seconds": 2073,
+          "microseconds": 0
+        }
+      },
+      "exit_code": {
+        "return_code": {
+          "set": true,
+          "infinite": false,
+          "number": 0
+        }
+      },
+      "tres": {
+        "allocated": [
+          {
+            "type": "cpu",
+            "name": "",
+            "count": {
+              "set": true,
+              "infinite": false,
+              "number": 4
+            }
+          },
+          {
+            "type": "mem",
+            "name": "",
+            "count": {
+              "set": true,
+              "infinite": false,
+              "number": 8000
+            }
+          },
+          {
+            "type": "gres",
+            "name": "gpu",
+            "count": {
+              "set": true,
+              "infinite": false,
+              "number": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "job_id": 9309019,
+      "name": "small-test",
+      "user": "frank",
+      "account": "labC",
+      "partition": "gpu",
+      "state": {
+        "current": [
+          "COMPLETED"
+        ],
+        "reason": ""
+      },
+      "time": {
+        "submission": 1783843680,
+        "start": 1783843700,
+        "end": 1783844600,
+        "elapsed": 900,
+        "total": {
+          "seconds": 2592,
+          "microseconds": 0
+        }
+      },
+      "exit_code": {
+        "return_code": {
+          "set": true,
+          "infinite": false,
+          "number": 0
+        }
+      },
+      "tres": {
+        "allocated": [
+          {
+            "type": "cpu",
+            "name": "",
+            "count": {
+              "set": true,
+              "infinite": false,
+              "number": 4
+            }
+          },
+          {
+            "type": "mem",
+            "name": "",
+            "count": {
+              "set": true,
+              "infinite": false,
+              "number": 8000
+            }
+          },
+          {
+            "type": "gres",
+            "name": "gpu",
+            "count": {
+              "set": true,
+              "infinite": false,
+              "number": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "job_id": 9309020,
+      "name": "small-test",
+      "user": "frank",
+      "account": "labC",
+      "partition": "gpu",
+      "state": {
+        "current": [
+          "COMPLETED"
+        ],
+        "reason": ""
+      },
+      "time": {
+        "submission": 1783836600,
+        "start": 1783836620,
+        "end": 1783837400,
+        "elapsed": 780,
+        "total": {
+          "seconds": 2246,
+          "microseconds": 0
+        }
+      },
+      "exit_code": {
+        "return_code": {
+          "set": true,
+          "infinite": false,
+          "number": 0
+        }
+      },
+      "tres": {
+        "allocated": [
+          {
+            "type": "cpu",
+            "name": "",
+            "count": {
+              "set": true,
+              "infinite": false,
+              "number": 4
+            }
+          },
+          {
+            "type": "mem",
+            "name": "",
+            "count": {
+              "set": true,
+              "infinite": false,
+              "number": 8000
+            }
+          },
+          {
+            "type": "gres",
+            "name": "gpu",
+            "count": {
+              "set": true,
+              "infinite": false,
+              "number": 1
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
