@@ -5,16 +5,11 @@ TUI dashboard. Wraps `sinfo`, `squeue`, `sacct`, `scontrol`, `sstat`, and
 `scancel` (all with `--json` where supported) and turns job-by-job rows into
 rollups you can scan at a glance.
 
-```
-$ muster partitions
-╭───────────┬───────────────┬──────────────────────┬───────────────────────┬────────────────────────┬─────┬──────╮
-│ PARTITION │ NODES I/M/A/D │ CPUS                 │ GPUS                  │ MEM                    │ RUN │ PEND │
-├───────────┼───────────────┼──────────────────────┼───────────────────────┼────────────────────────┼─────┼──────┤
-│ gpu       │ 0/3/0/0       │ 168/352   ████▊░░░░░ │ 3/4 a100   ███████▌░░ │ 1.1T/1.9T   █████▌░░░░ │  30 │   10 │
-│ cpu       │ 3/6/0/0       │ 188/1088  █▋░░░░░░░░ │ 0/16 l40s  ░░░░░░░░░░ │ 5.0T/15.5T  ███▏░░░░░░ │  21 │   43 │
-│ ml        │ 2/0/0/0       │ 0/224     ░░░░░░░░░░ │ 0/7 l40    ░░░░░░░░░░ │ 0/1.9T      ░░░░░░░░░░ │   0 │    0 │
-╰───────────┴───────────────┴──────────────────────┴───────────────────────┴────────────────────────┴─────┴──────╯
-```
+![muster partitions](docs/img/partitions.png)
+![muster queue](docs/img/queue.png)
+![muster history](docs/img/history.png)
+
+More views (`jobs`, `users`, `gpu`) live in [`docs/img/`](docs/img/).
 
 ## Requirements
 
@@ -27,12 +22,33 @@ submit host. No REST API token required.
 ## Install
 
 ```bash
-git clone <repo> muster
+git clone https://github.com/overdodactyl/muster.git
 cd muster
 ./build.sh          # go build → bin/muster
 make install        # ~/.local/bin/muster (PREFIX= overrides)
 muster install-completion        # writes shell completion to the right place
 ```
+
+Prebuilt Linux and macOS binaries (`amd64` + `arm64`) for each tagged release
+are attached to the corresponding [GitHub Release][releases].
+
+[releases]: https://github.com/overdodactyl/muster/releases
+
+## Try it without a cluster
+
+muster ships with a `demo/` folder of Slurm-shape fixtures so you can drive
+every static command and the dashboard without touching a real submit host —
+useful for kicking the tires, demos, or contributing:
+
+```bash
+muster --fixtures ./demo partitions
+muster --fixtures ./demo dash
+MUSTER_FIXTURES=./demo muster queue      # env var works too
+```
+
+In fixture mode `scancel` becomes a no-op, `nvidia-smi` returns nothing, and
+per-job efficiency is synthesized from wall-clock runtime. See
+[`demo/README.md`](demo/README.md) for the file layout.
 
 ## Static commands
 
