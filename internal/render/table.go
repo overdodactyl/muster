@@ -129,7 +129,6 @@ func RenderNodes(w io.Writer, rows []aggregate.NodeRow, showJobs bool) {
 	cpuStrs := make([]string, len(rows))
 	gpuStrs := make([]string, len(rows))
 	memStrs := make([]string, len(rows))
-	memUsed := make([]int, len(rows))
 	for i, r := range rows {
 		cpuStrs[i] = fmt.Sprintf("%d/%d", r.CPUsAlloc, r.CPUsTotal)
 		if r.GPUsTotal > 0 {
@@ -139,12 +138,7 @@ func RenderNodes(w io.Writer, rows []aggregate.NodeRow, showJobs bool) {
 			}
 			gpuStrs[i] = fmt.Sprintf("%d/%d%s", r.GPUsAlloc, r.GPUsTotal, model)
 		}
-		mu := r.MemTotalMB - r.MemFreeMB
-		if mu < r.MemAllocMB {
-			mu = r.MemAllocMB
-		}
-		memUsed[i] = mu
-		memStrs[i] = fmt.Sprintf("%s/%s", HumanMB(mu), HumanMB(r.MemTotalMB))
+		memStrs[i] = fmt.Sprintf("%s/%s", HumanMB(r.MemAllocMB), HumanMB(r.MemTotalMB))
 	}
 	cw, gw, mw := maxLen(cpuStrs), maxLen(gpuStrs), maxLen(memStrs)
 
@@ -165,7 +159,7 @@ func RenderNodes(w io.Writer, rows []aggregate.NodeRow, showJobs bool) {
 			users = JoinList(coloured, 6)
 		}
 		cpus := padRight(cpuStrs[i], cw) + "  " + Bar(r.CPUsAlloc, r.CPUsTotal, 8)
-		mem := padRight(memStrs[i], mw) + "  " + Bar(memUsed[i], r.MemTotalMB, 8)
+		mem := padRight(memStrs[i], mw) + "  " + Bar(r.MemAllocMB, r.MemTotalMB, 8)
 		t.AppendRow(table.Row{
 			ColorCyan(r.Name),
 			r.Partition,
