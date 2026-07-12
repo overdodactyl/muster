@@ -5,9 +5,9 @@ TUI dashboard. Wraps `sinfo`, `squeue`, `sacct`, `scontrol`, `sstat`, and
 `scancel` (all with `--json` where supported) and turns job-by-job rows into
 rollups you can scan at a glance.
 
-![muster partitions](docs/img/partitions.png)
-![muster queue](docs/img/queue.png)
-![muster history](docs/img/history.png)
+![muster partitions](docs/img/partitions.svg)
+![muster queue](docs/img/queue.svg)
+![muster history](docs/img/history.svg)
 
 More views (`jobs`, `users`, `gpu`) live in [`docs/img/`](docs/img/).
 
