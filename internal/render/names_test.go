@@ -6,7 +6,7 @@ func TestParseGECOSName(t *testing.T) {
 	tests := []struct {
 		gecos, want string
 	}{
-		{"Doe, Patrick W. (Pat)", "Pat Johnson"},
+		{"Doe, Patrick W. (Pat)", "Pat Doe"},
 		{"Doe, John", "John Doe"},
 		{"Doe, John M.", "John Doe"},
 		{"Doe, John,Room 202,555-1234", "John Doe"},

@@ -21,8 +21,8 @@ import (
 )
 
 const (
-	refreshInterval    = 10 * time.Second
-	historyRefreshEvery = 6 // refresh sacct every Nth tick (sacct is slow)
+	refreshInterval      = 10 * time.Second
+	historyRefreshEvery  = 6 // refresh sacct every Nth tick (sacct is slow)
 	defaultHistoryWindow = 24 * time.Hour
 )
 
@@ -90,9 +90,9 @@ type model struct {
 	jobs  []slurm.Job
 	acct  []slurm.AcctJob
 
-	nodesLoaded bool
-	jobsLoaded  bool
-	acctLoaded  bool
+	nodesLoaded  bool
+	jobsLoaded   bool
+	acctLoaded   bool
 	acctInFlight bool
 
 	history []historySample
@@ -132,7 +132,7 @@ type model struct {
 	detailLogs     []string // captured stdout lines, refreshed each tick while open
 	detailLogErr   error
 	detailEff      slurm.JobEfficiency // live cpu/mem stats from sstat
-	detailViewport viewport.Model // scrollable log viewer (jobs/queue only)
+	detailViewport viewport.Model      // scrollable log viewer (jobs/queue only)
 	detailVPReady  bool
 
 	// Per-detail CPU history: cleared on each new openDetail; updated when
@@ -147,11 +147,11 @@ type model struct {
 	detailGPU []slurm.GPUUtil
 
 	// In-log search (active only while the log viewer is open).
-	logSearch       string
-	logSearchMode   bool
-	logSearchInput  textinput.Model
-	logMatchLines   []int // wrapped-line indices that contain a match
-	logMatchCursor  int   // index into logMatchLines for n/N navigation
+	logSearch      string
+	logSearchMode  bool
+	logSearchInput textinput.Model
+	logMatchLines  []int // wrapped-line indices that contain a match
+	logMatchCursor int   // index into logMatchLines for n/N navigation
 
 	confirmCancelID    int64
 	confirmCancelName  string
@@ -1428,7 +1428,7 @@ func highlightMatches(line, needle string) string {
 	if needle == "" {
 		return line
 	}
-	const onLeft = "\x1b[1;43;30m"  // bold black-on-yellow
+	const onLeft = "\x1b[1;43;30m" // bold black-on-yellow
 	const onRight = "\x1b[0m"
 	lower := strings.ToLower(line)
 	nlower := strings.ToLower(needle)
@@ -2419,7 +2419,6 @@ func orDefault(s, def string) string {
 	}
 	return s
 }
-
 
 func (m *model) renderFooter() string {
 	if m.filterMode {

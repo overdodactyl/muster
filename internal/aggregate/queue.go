@@ -111,7 +111,7 @@ type queueCollapseItem struct {
 // as collapseArrays for JobRow but on QueueRow.
 func collapseArraysQueue(items []queueCollapseItem) []QueueRow {
 	type group struct {
-		first QueueRow
+		first                  QueueRow
 		sumCPU, sumGPU, sumMem int
 		minPrio                int64
 		oldest                 time.Time

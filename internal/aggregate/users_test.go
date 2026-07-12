@@ -25,7 +25,7 @@ func TestUsers_RollupAndSort(t *testing.T) {
 		t.Errorf("alice rollup wrong: %+v", *alice)
 	}
 	// Oldest running age should be 2h (1001 started 2h before sampleNow).
-	if alice.OldestRunAge < (2*60*60*1e9) {
+	if alice.OldestRunAge < (2 * 60 * 60 * 1e9) {
 		t.Errorf("alice oldest run age = %v, want >= 2h", alice.OldestRunAge)
 	}
 }

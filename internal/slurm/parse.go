@@ -185,8 +185,8 @@ func ParseDependency(s string) []DependencyEntry {
 			continue
 		}
 		out = append(out, DependencyEntry{
-			Kind:      parts[0],
-			IDs:       parts[1:],
+			Kind:       parts[0],
+			IDs:        parts[1:],
 			Annotation: annot,
 		})
 	}

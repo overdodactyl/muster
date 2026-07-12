@@ -14,7 +14,7 @@ const (
 
 var theme Theme = ThemeDark
 
-func SetTheme(t Theme) { theme = t }
+func SetTheme(t Theme)    { theme = t }
 func CurrentTheme() Theme { return theme }
 
 var (

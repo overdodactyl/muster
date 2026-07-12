@@ -8,37 +8,37 @@ func TestPartitions_AggregatesAcrossNodesAndJobs(t *testing.T) {
 		t.Fatalf("expected 2 partitions (gpu + cpu), got %d", len(rows))
 	}
 
-	var dil, cpu *PartitionSummary
+	var gpu, cpu *PartitionSummary
 	for i := range rows {
 		switch rows[i].Name {
 		case "gpu":
-			dil = &rows[i]
+			gpu = &rows[i]
 		case "cpu":
 			cpu = &rows[i]
 		}
 	}
-	if dil == nil || cpu == nil {
+	if gpu == nil || cpu == nil {
 		t.Fatalf("missing partition; got names %+v", rows)
 	}
 
 	// gpu: 2 nodes, 64 total CPU, 20 alloc, 1 mixed + 1 idle, 4 GPUs total, 3 alloc
-	if dil.TotalNodes != 2 {
-		t.Errorf("gpu total nodes = %d, want 2", dil.TotalNodes)
+	if gpu.TotalNodes != 2 {
+		t.Errorf("gpu total nodes = %d, want 2", gpu.TotalNodes)
 	}
-	if dil.TotalCPUs != 64 || dil.AllocCPUs != 20 {
-		t.Errorf("gpu CPUs alloc/total = %d/%d, want 20/64", dil.AllocCPUs, dil.TotalCPUs)
+	if gpu.TotalCPUs != 64 || gpu.AllocCPUs != 20 {
+		t.Errorf("gpu CPUs alloc/total = %d/%d, want 20/64", gpu.AllocCPUs, gpu.TotalCPUs)
 	}
-	if dil.NodeCounts.Idle != 1 || dil.NodeCounts.Mixed != 1 {
-		t.Errorf("gpu node counts wrong: %+v", dil.NodeCounts)
+	if gpu.NodeCounts.Idle != 1 || gpu.NodeCounts.Mixed != 1 {
+		t.Errorf("gpu node counts wrong: %+v", gpu.NodeCounts)
 	}
-	if dil.TotalGPUs != 4 || dil.AllocGPUs != 3 {
-		t.Errorf("gpu GPUs alloc/total = %d/%d, want 3/4", dil.AllocGPUs, dil.TotalGPUs)
+	if gpu.TotalGPUs != 4 || gpu.AllocGPUs != 3 {
+		t.Errorf("gpu GPUs alloc/total = %d/%d, want 3/4", gpu.AllocGPUs, gpu.TotalGPUs)
 	}
-	if dil.GPUModel != "a100" {
-		t.Errorf("gpu GPU model = %q, want a100", dil.GPUModel)
+	if gpu.GPUModel != "a100" {
+		t.Errorf("gpu GPU model = %q, want a100", gpu.GPUModel)
 	}
-	if dil.RunningJobs != 2 || dil.PendingJobs != 2 {
-		t.Errorf("gpu jobs running/pending = %d/%d, want 2/2", dil.RunningJobs, dil.PendingJobs)
+	if gpu.RunningJobs != 2 || gpu.PendingJobs != 2 {
+		t.Errorf("gpu jobs running/pending = %d/%d, want 2/2", gpu.RunningJobs, gpu.PendingJobs)
 	}
 
 	// cpu: 1 drained node, no jobs in sample

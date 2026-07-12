@@ -118,13 +118,13 @@ type arrayCollapseItem struct {
 // running tasks; TimeLimit takes the first non-zero value seen.
 func collapseArrays(items []arrayCollapseItem) []JobRow {
 	type group struct {
-		first JobRow
+		first                  JobRow
 		sumCPU, sumGPU, sumMem int
-		maxRuntime time.Duration
-		timeLimit  time.Duration
-		states     map[string]int
-		count      int
-		nodes      map[string]bool
+		maxRuntime             time.Duration
+		timeLimit              time.Duration
+		states                 map[string]int
+		count                  int
+		nodes                  map[string]bool
 	}
 	groups := map[int64]*group{}
 	var out []JobRow

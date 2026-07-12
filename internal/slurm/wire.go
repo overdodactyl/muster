@@ -9,19 +9,19 @@ type scontrolNodeWire struct {
 }
 
 type scontrolNode struct {
-	Name         string   `json:"name"`
-	State        []string `json:"state"`
-	Partitions   []string `json:"partitions"`
-	CPUs         int      `json:"cpus"`
-	AllocCPUs    int      `json:"alloc_cpus"`
-	IdleCPUs     *int     `json:"idle_cpus"`
-	RealMemory   int      `json:"real_memory"`
-	AllocMemory  int      `json:"alloc_memory"`
-	FreeMemory   slurmNum `json:"free_mem"`
-	GRES         string   `json:"gres"`
-	GRESUsed     string   `json:"gres_used"`
-	Reason       string   `json:"reason"`
-	CPULoad      int      `json:"cpu_load"`
+	Name        string   `json:"name"`
+	State       []string `json:"state"`
+	Partitions  []string `json:"partitions"`
+	CPUs        int      `json:"cpus"`
+	AllocCPUs   int      `json:"alloc_cpus"`
+	IdleCPUs    *int     `json:"idle_cpus"`
+	RealMemory  int      `json:"real_memory"`
+	AllocMemory int      `json:"alloc_memory"`
+	FreeMemory  slurmNum `json:"free_mem"`
+	GRES        string   `json:"gres"`
+	GRESUsed    string   `json:"gres_used"`
+	Reason      string   `json:"reason"`
+	CPULoad     int      `json:"cpu_load"`
 }
 
 // scontrol show partition --json
@@ -30,9 +30,9 @@ type scontrolPartWire struct {
 }
 
 type scontrolPart struct {
-	Name     string `json:"name"`
-	State    any    `json:"state"`
-	Nodes    struct {
+	Name  string `json:"name"`
+	State any    `json:"state"`
+	Nodes struct {
 		Configured string `json:"configured"`
 	} `json:"nodes"`
 	Maximums slurmNum `json:"maximums"`

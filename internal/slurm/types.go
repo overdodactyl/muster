@@ -77,10 +77,10 @@ type JobEfficiency struct {
 
 // GPUUtil is one nvidia-smi sample from inside a running job's allocation.
 type GPUUtil struct {
-	Index       int // GPU index on the node
-	UtilGPUPct  int // 0..100, GPU compute utilization
-	MemUsedMB   int
-	MemTotalMB  int
+	Index      int // GPU index on the node
+	UtilGPUPct int // 0..100, GPU compute utilization
+	MemUsedMB  int
+	MemTotalMB int
 }
 
 type Partition struct {

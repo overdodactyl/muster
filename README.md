@@ -11,15 +11,15 @@ $ muster partitions
 │ PARTITION │ NODES I/M/A/D │ CPUS                 │ GPUS                  │ MEM                    │ RUN │ PEND │
 ├───────────┼───────────────┼──────────────────────┼───────────────────────┼────────────────────────┼─────┼──────┤
 │ gpu       │ 0/3/0/0       │ 168/352   ████▊░░░░░ │ 3/4 a100   ███████▌░░ │ 1.1T/1.9T   █████▌░░░░ │  30 │   10 │
-│ cpu      │ 3/6/0/0       │ 188/1088  █▋░░░░░░░░ │ 0/16 l40s  ░░░░░░░░░░ │ 5.0T/15.5T  ███▏░░░░░░ │  21 │   43 │
-│ ml │ 2/0/0/0       │ 0/224     ░░░░░░░░░░ │ 0/7 l40    ░░░░░░░░░░ │ 0/1.9T      ░░░░░░░░░░ │   0 │    0 │
+│ cpu       │ 3/6/0/0       │ 188/1088  █▋░░░░░░░░ │ 0/16 l40s  ░░░░░░░░░░ │ 5.0T/15.5T  ███▏░░░░░░ │  21 │   43 │
+│ ml        │ 2/0/0/0       │ 0/224     ░░░░░░░░░░ │ 0/7 l40    ░░░░░░░░░░ │ 0/1.9T      ░░░░░░░░░░ │   0 │    0 │
 ╰───────────┴───────────────┴──────────────────────┴───────────────────────┴────────────────────────┴─────┴──────╯
 ```
 
 ## Requirements
 
 - Slurm 23.x or newer (`--json` on the standard CLIs)
-- Go 1.24+ to build (`module load go/24.2` on the cluster)
+- Go 1.24+ to build
 
 Shells out to the Slurm CLIs, so it works for any user with shell access to a
 submit host. No REST API token required.
@@ -29,7 +29,7 @@ submit host. No REST API token required.
 ```bash
 git clone <repo> muster
 cd muster
-./build.sh          # module load go/24.2 + go build → bin/muster
+./build.sh          # go build → bin/muster
 make install        # ~/.local/bin/muster (PREFIX= overrides)
 muster install-completion        # writes shell completion to the right place
 ```

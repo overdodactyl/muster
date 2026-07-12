@@ -118,7 +118,7 @@ func sampleAcctJobs() []slurm.AcctJob {
 		{
 			ID: 9004, Name: "elsewhere", User: "alice", Partition: "cpu",
 			State: "COMPLETED", Elapsed: 1 * time.Hour,
-			TotalCPU:  2 * time.Hour, AllocTRES: map[string]int{"cpu": 4},
+			TotalCPU: 2 * time.Hour, AllocTRES: map[string]int{"cpu": 4},
 		},
 	}
 }

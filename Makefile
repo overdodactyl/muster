@@ -3,7 +3,7 @@ BIN_DIR  = bin
 PREFIX  ?= $(HOME)/.local
 GO      ?= go
 
-# /tmp on the cluster can be noexec, which breaks `go test`. Use a repo-local tmpdir.
+# Some systems mount /tmp noexec, which breaks `go test`. Use a repo-local tmpdir.
 export GOTMPDIR := $(CURDIR)/.gotmp
 
 VERSION = $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)

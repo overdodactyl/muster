@@ -26,18 +26,18 @@ func TestParseScontrolNodes_Fixture(t *testing.T) {
 		t.Fatal("no nodes parsed")
 	}
 	// At least one gpu node should appear (gpu partition exists on this cluster).
-	foundDIL := false
+	foundGPU := false
 	for _, n := range nodes {
 		for _, p := range n.Partitions {
 			if p == "gpu" {
-				foundDIL = true
+				foundGPU = true
 				if n.CPUs <= 0 {
 					t.Errorf("gpu node %s has non-positive CPU count %d", n.Name, n.CPUs)
 				}
 			}
 		}
 	}
-	if !foundDIL {
+	if !foundGPU {
 		t.Error("no gpu nodes found in fixture")
 	}
 }

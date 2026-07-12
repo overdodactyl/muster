@@ -8,15 +8,15 @@ import (
 )
 
 type UsageRow struct {
-	User          string        `json:"user"`
-	Jobs          int           `json:"jobs"`
-	CPUHoursReq   float64       `json:"cpu_hours_requested"`
-	CPUHoursUsed  float64       `json:"cpu_hours_used"`
-	Efficiency    float64       `json:"efficiency_pct"`
-	WorstJobID    int64         `json:"worst_job_id,omitempty"`
-	WorstJobName  string        `json:"worst_job_name,omitempty"`
-	WorstJobEff   float64       `json:"worst_job_efficiency_pct,omitempty"`
-	WorstJobUsed  time.Duration `json:"worst_job_used_ns,omitempty"`
+	User         string        `json:"user"`
+	Jobs         int           `json:"jobs"`
+	CPUHoursReq  float64       `json:"cpu_hours_requested"`
+	CPUHoursUsed float64       `json:"cpu_hours_used"`
+	Efficiency   float64       `json:"efficiency_pct"`
+	WorstJobID   int64         `json:"worst_job_id,omitempty"`
+	WorstJobName string        `json:"worst_job_name,omitempty"`
+	WorstJobEff  float64       `json:"worst_job_efficiency_pct,omitempty"`
+	WorstJobUsed time.Duration `json:"worst_job_used_ns,omitempty"`
 }
 
 // minElapsedForEff filters out very short jobs from the worst-job calculation;

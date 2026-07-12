@@ -59,12 +59,13 @@ Run in the background like the exporter:
 
 		// Try to capture cluster name once for the record header.
 		cluster := ""
-		if cctx, ccancel := context.WithTimeout(ctx, 5*time.Second); true {
+		func() {
+			cctx, ccancel := context.WithTimeout(ctx, 5*time.Second)
+			defer ccancel()
 			if c, err := client.ClusterName(cctx); err == nil {
 				cluster = c
 			}
-			ccancel()
-		}
+		}()
 
 		ticker := time.NewTicker(recorderInterval)
 		defer ticker.Stop()

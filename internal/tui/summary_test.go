@@ -41,9 +41,9 @@ func TestRenderSummary_Live(t *testing.T) {
 	}
 
 	fmt.Println("=== with -p gpu ===")
-	mDIL := &model{client: c, partition: "gpu", nodes: nodes, jobs: jobs, width: 120, height: 40}
-	mDIL.recordSample()
-	fmt.Println(mDIL.renderSummary(120))
+	mgpu := &model{client: c, partition: "gpu", nodes: nodes, jobs: jobs, width: 120, height: 40}
+	mgpu.recordSample()
+	fmt.Println(mgpu.renderSummary(120))
 	fmt.Println()
 
 	fmt.Println("=== without -p (cluster-mode, per-partition cards) ===")

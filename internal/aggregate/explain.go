@@ -9,13 +9,13 @@ import (
 )
 
 type ExplainReport struct {
-	Job          slurm.Job
-	ReasonHuman  string
-	RequiredCPU  int    // per-node
-	RequiredMem  int    // per-node, MB
-	RequiredGPU  int    // per-node
-	GPUModel     string // requested gpu model if any
-	NodeFits     []NodeFit
+	Job         slurm.Job
+	ReasonHuman string
+	RequiredCPU int    // per-node
+	RequiredMem int    // per-node, MB
+	RequiredGPU int    // per-node
+	GPUModel    string // requested gpu model if any
+	NodeFits    []NodeFit
 }
 
 type NodeFit struct {

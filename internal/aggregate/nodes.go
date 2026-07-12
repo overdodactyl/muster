@@ -8,23 +8,23 @@ import (
 )
 
 type NodeRow struct {
-	Name        string   `json:"name"`
-	Partition   string   `json:"partition"`
-	State       []string `json:"state"`
-	StateClass  string   `json:"state_class"`
-	CPUsAlloc   int      `json:"cpus_alloc"`
-	CPUsIdle    int      `json:"cpus_idle"`
-	CPUsTotal   int      `json:"cpus_total"`
-	MemAllocMB  int      `json:"mem_alloc_mb"`
-	MemFreeMB   int      `json:"mem_free_mb"`
-	MemTotalMB  int      `json:"mem_total_mb"`
-	GPUsAlloc   int      `json:"gpus_alloc"`
-	GPUsTotal   int      `json:"gpus_total"`
-	GPUModel    string   `json:"gpu_model,omitempty"`
-	Users       []string `json:"users,omitempty"`
-	UserJobs    []string `json:"user_jobs,omitempty"` // "user(jobid)" when --show-jobs
-	JobCount    int      `json:"job_count"`
-	Reason      string   `json:"reason,omitempty"`
+	Name       string   `json:"name"`
+	Partition  string   `json:"partition"`
+	State      []string `json:"state"`
+	StateClass string   `json:"state_class"`
+	CPUsAlloc  int      `json:"cpus_alloc"`
+	CPUsIdle   int      `json:"cpus_idle"`
+	CPUsTotal  int      `json:"cpus_total"`
+	MemAllocMB int      `json:"mem_alloc_mb"`
+	MemFreeMB  int      `json:"mem_free_mb"`
+	MemTotalMB int      `json:"mem_total_mb"`
+	GPUsAlloc  int      `json:"gpus_alloc"`
+	GPUsTotal  int      `json:"gpus_total"`
+	GPUModel   string   `json:"gpu_model,omitempty"`
+	Users      []string `json:"users,omitempty"`
+	UserJobs   []string `json:"user_jobs,omitempty"` // "user(jobid)" when --show-jobs
+	JobCount   int      `json:"job_count"`
+	Reason     string   `json:"reason,omitempty"`
 }
 
 // Nodes builds per-node rows for the given partition (empty = all). Joins jobs

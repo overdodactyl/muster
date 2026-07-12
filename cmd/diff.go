@@ -158,4 +158,3 @@ func truncateName(s string, n int) string {
 	}
 	return string(r[:n-1]) + "…"
 }
-

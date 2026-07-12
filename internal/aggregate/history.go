@@ -8,15 +8,15 @@ import (
 )
 
 type HistoryRow struct {
-	Key             string  `json:"key"` // user / account / state / partition
-	Jobs            int     `json:"jobs"`
-	Completed       int     `json:"completed"`
-	Failed          int     `json:"failed"`
-	Timeout         int     `json:"timeout"`
-	Cancelled       int     `json:"cancelled"`
-	CPUHours        float64 `json:"cpu_hours"`
-	GPUHours        float64 `json:"gpu_hours"`
-	MemoryGBHours   float64 `json:"memory_gb_hours"`
+	Key           string  `json:"key"` // user / account / state / partition
+	Jobs          int     `json:"jobs"`
+	Completed     int     `json:"completed"`
+	Failed        int     `json:"failed"`
+	Timeout       int     `json:"timeout"`
+	Cancelled     int     `json:"cancelled"`
+	CPUHours      float64 `json:"cpu_hours"`
+	GPUHours      float64 `json:"gpu_hours"`
+	MemoryGBHours float64 `json:"memory_gb_hours"`
 }
 
 // History rolls sacct jobs up by the chosen key.
