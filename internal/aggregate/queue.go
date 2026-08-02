@@ -25,6 +25,11 @@ type QueueRow struct {
 	SubmitTime    time.Time     `json:"submit_time"`
 	SubmitAge     time.Duration `json:"submit_age_ns"`
 	EligibleStart time.Time     `json:"eligible_start,omitempty"`
+	// EstStart is the scheduler's estimated start time (from squeue's
+	// start_time field). Set for any pending job with a non-zero estimate —
+	// both BeginTime holds (hard) and backfill projections (best-effort).
+	// Zero when Slurm has no plan yet.
+	EstStart time.Time `json:"est_start,omitempty"`
 
 	// IsNew is set by the TUI when this job appeared since the last refresh.
 	IsNew bool `json:"is_new,omitempty"`
@@ -92,6 +97,9 @@ func QueueCollapsed(jobs []slurm.Job, partition string, includeRunning, expandAr
 		if !j.SubmitTime.IsZero() {
 			row.SubmitAge = now.Sub(j.SubmitTime)
 		}
+		if j.State == "PENDING" && !j.StartTime.IsZero() {
+			row.EstStart = j.StartTime
+		}
 		if j.Reason == "BeginTime" && !j.StartTime.IsZero() {
 			row.EligibleStart = j.StartTime
 			row.ReasonHuman = "Holding until " + j.StartTime.Format("2006-01-02 15:04")
@@ -127,6 +135,7 @@ func collapseArraysQueue(items []queueCollapseItem) []QueueRow {
 		minPrio                int64
 		oldest                 time.Time
 		earliestEligible       time.Time
+		earliestEst            time.Time
 		throttle               int
 		states                 map[string]int
 		count                  int
@@ -173,6 +182,9 @@ func collapseArraysQueue(items []queueCollapseItem) []QueueRow {
 			if !it.row.SubmitTime.IsZero() && (g.oldest.IsZero() || it.row.SubmitTime.Before(g.oldest)) {
 				g.oldest = it.row.SubmitTime
 			}
+			if !it.row.EstStart.IsZero() && (g.earliestEst.IsZero() || it.row.EstStart.Before(g.earliestEst)) {
+				g.earliestEst = it.row.EstStart
+			}
 			continue
 		}
 		g.count++
@@ -188,6 +200,9 @@ func collapseArraysQueue(items []queueCollapseItem) []QueueRow {
 		}
 		if !it.row.EligibleStart.IsZero() && (g.earliestEligible.IsZero() || it.row.EligibleStart.Before(g.earliestEligible)) {
 			g.earliestEligible = it.row.EligibleStart
+		}
+		if !it.row.EstStart.IsZero() && (g.earliestEst.IsZero() || it.row.EstStart.Before(g.earliestEst)) {
+			g.earliestEst = it.row.EstStart
 		}
 	}
 	// Emit groups in ascending array-id order so downstream stable sorts
@@ -206,6 +221,7 @@ func collapseArraysQueue(items []queueCollapseItem) []QueueRow {
 		row.Priority = g.minPrio
 		row.SubmitTime = g.oldest
 		row.EligibleStart = g.earliestEligible
+		row.EstStart = g.earliestEst
 		if !g.oldest.IsZero() {
 			row.SubmitAge = time.Since(g.oldest)
 		}
