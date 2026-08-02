@@ -420,6 +420,30 @@ func formatArrayRangeState(state string, count int) string {
 	return fmt.Sprintf("%s %d", state, count)
 }
 
+// formatEstStart renders Slurm's estimated start time compactly relative
+// to now: "HH:MM" if today, "Mon HH:MM" this week, "Jan 2 HH:MM" further out.
+// Times already in the past are shown as "now" (backfill lag). Zero
+// returns a faint dash — Slurm has no plan yet.
+func formatEstStart(t, now time.Time) string {
+	if t.IsZero() {
+		return ColorFaint("-")
+	}
+	delta := t.Sub(now)
+	if delta < 0 {
+		return ColorGreen("now")
+	}
+	local := t.Local()
+	nowLocal := now.Local()
+	sameDay := local.Year() == nowLocal.Year() && local.YearDay() == nowLocal.YearDay()
+	if sameDay {
+		return local.Format("15:04")
+	}
+	if delta < 6*24*time.Hour {
+		return local.Format("Mon 15:04")
+	}
+	return local.Format("Jan 2 15:04")
+}
+
 // formatArrayStateSummary turns a state-count map ({RUNNING: 5, PENDING: 3})
 // into a compact colored summary like "R 5 · PD 3" for the array's state cell.
 func formatArrayStateSummary(counts map[string]int) string {
@@ -501,7 +525,8 @@ func RenderQueue(w io.Writer, rows []aggregate.QueueRow) {
 		fmt.Fprintln(w, "no queued jobs matched")
 		return
 	}
-	t := newTable(w, []string{"JOBID", "USER", "NAME", "CPU", "GPU", "MEM", "PRI", "REASON", "EXPLANATION"})
+	t := newTable(w, []string{"JOBID", "USER", "NAME", "CPU", "GPU", "MEM", "PRI", "STARTS", "REASON", "EXPLANATION"})
+	now := time.Now()
 	for _, r := range rows {
 		gpu := ColorFaint("-")
 		if r.GPUs > 0 {
@@ -529,6 +554,7 @@ func RenderQueue(w io.Writer, rows []aggregate.QueueRow) {
 			gpu,
 			HumanMB(r.MemoryMB),
 			r.Priority,
+			formatEstStart(r.EstStart, now),
 			reason,
 			r.ReasonHuman,
 		})

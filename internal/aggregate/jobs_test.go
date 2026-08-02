@@ -74,6 +74,7 @@ func sampleArrayJobs() []slurm.Job {
 			Reason:    "JobArrayTaskLimit",
 			NodeCount: 1, CPUs: 4, MemPerNode: 8000, GRESPerNode: "gres/gpu:1",
 			SubmitTime:      sampleNow.Add(-20 * time.Minute),
+			StartTime:       sampleNow.Add(45 * time.Minute), // backfill estimate
 			Priority:        900,
 			TimeLimit:       1 * time.Hour,
 			ArrayJobID:      200000,

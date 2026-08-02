@@ -1,6 +1,11 @@
 package aggregate
 
-import "testing"
+import (
+	"testing"
+	"time"
+
+	"muster/internal/slurm"
+)
 
 func TestQueue_PendingOnly(t *testing.T) {
 	rows := Queue(sampleJobs(), "gpu", false, "", "priority", sampleNow)
@@ -57,5 +62,37 @@ func TestQueue_CollapsePendingRangeIntoArray(t *testing.T) {
 	}
 	if r.ArrayThrottle != 3 {
 		t.Errorf("ArrayThrottle = %d, want 3", r.ArrayThrottle)
+	}
+	// Range row has StartTime = sampleNow+45m; that should surface as
+	// the group's EstStart.
+	wantEst := sampleNow.Add(45 * time.Minute)
+	if !r.EstStart.Equal(wantEst) {
+		t.Errorf("EstStart = %v, want %v", r.EstStart, wantEst)
+	}
+}
+
+func TestQueue_EstStartFromBackfillEstimate(t *testing.T) {
+	// Regular (non-array) pending job with reason != BeginTime but with a
+	// scheduler-provided StartTime → EstStart populated, EligibleStart not.
+	est := sampleNow.Add(2 * time.Hour)
+	jobs := []slurm.Job{
+		{
+			ID: 5001, User: "eve", Partition: "gpu", State: "PENDING",
+			Reason: "Resources",
+			CPUs:   4, MemPerNode: 16000,
+			SubmitTime: sampleNow.Add(-15 * time.Minute),
+			StartTime:  est,
+			Priority:   500,
+		},
+	}
+	rows := Queue(jobs, "gpu", false, "", "priority", sampleNow)
+	if len(rows) != 1 {
+		t.Fatalf("expected 1 row, got %d", len(rows))
+	}
+	if !rows[0].EstStart.Equal(est) {
+		t.Errorf("EstStart = %v, want %v", rows[0].EstStart, est)
+	}
+	if !rows[0].EligibleStart.IsZero() {
+		t.Errorf("EligibleStart should be zero for non-BeginTime job, got %v", rows[0].EligibleStart)
 	}
 }
