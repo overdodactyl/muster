@@ -376,8 +376,12 @@ func RenderJobs(w io.Writer, rows []aggregate.JobRow) {
 		}
 		jobIDStr := fmt.Sprintf("%d", r.JobID)
 		if r.ArrayCount > 0 {
-			jobIDStr = fmt.Sprintf("%d_*", r.JobID)
+			jobIDStr = formatArrayJobID(r.JobID, r.ArrayThrottle)
 			state = formatArrayStateSummary(r.ArrayStates)
+		} else if r.ArrayTaskString != "" {
+			// Expanded view: a compact pending-range row.
+			jobIDStr = fmt.Sprintf("%d_[%s]", r.JobID, r.ArrayTaskString)
+			state = formatArrayRangeState(r.State, r.ArrayTaskCount)
 		}
 		t.AppendRow(table.Row{
 			formatRowMarker(r.IsSelected, r.IsNew) + jobIDStr,
@@ -393,6 +397,27 @@ func RenderJobs(w io.Writer, rows []aggregate.JobRow) {
 		})
 	}
 	t.Render()
+}
+
+// formatArrayJobID formats a collapsed-array job id, appending "[%N]" when
+// the array has an active-tasks throttle. Example: 9662476_* [%3].
+func formatArrayJobID(id int64, throttle int) string {
+	if throttle > 0 {
+		return fmt.Sprintf("%d_* [%%%d]", id, throttle)
+	}
+	return fmt.Sprintf("%d_*", id)
+}
+
+// formatArrayRangeState renders the state cell for a compact-range row in the
+// expanded view: e.g. "PD 152" instead of just "PD".
+func formatArrayRangeState(state string, count int) string {
+	switch state {
+	case "PENDING":
+		return ColorYellow(fmt.Sprintf("PD %d", count))
+	case "RUNNING":
+		return ColorGreen(fmt.Sprintf("R %d", count))
+	}
+	return fmt.Sprintf("%s %d", state, count)
 }
 
 // formatArrayStateSummary turns a state-count map ({RUNNING: 5, PENDING: 3})
@@ -492,7 +517,9 @@ func RenderQueue(w io.Writer, rows []aggregate.QueueRow) {
 		}
 		jobIDStr := fmt.Sprintf("%d", r.JobID)
 		if r.ArrayCount > 0 {
-			jobIDStr = fmt.Sprintf("%d_* (%d)", r.JobID, r.ArrayCount)
+			jobIDStr = fmt.Sprintf("%s (%d)", formatArrayJobID(r.JobID, r.ArrayThrottle), r.ArrayCount)
+		} else if r.ArrayTaskString != "" {
+			jobIDStr = fmt.Sprintf("%d_[%s]", r.JobID, r.ArrayTaskString)
 		}
 		t.AppendRow(table.Row{
 			formatRowMarker(r.IsSelected, r.IsNew) + jobIDStr,

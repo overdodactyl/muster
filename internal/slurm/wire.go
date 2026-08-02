@@ -70,6 +70,8 @@ type squeueJob struct {
 	Command                 string   `json:"command"`
 	ArrayJobID              slurmNum `json:"array_job_id"`
 	ArrayTaskID             slurmNum `json:"array_task_id"`
+	ArrayTaskString         string   `json:"array_task_string"`
+	ArrayMaxTasks           slurmNum `json:"array_max_tasks"`
 	Dependency              string   `json:"dependency"`
 }
 
