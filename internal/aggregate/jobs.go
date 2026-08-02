@@ -129,9 +129,9 @@ type arrayCollapseItem struct {
 //
 // A compact-range row (raw.ArrayTaskString != "") represents many pending
 // tasks in one input row; its ArrayTaskCount contributes to the group's
-// count and state histogram, but per-task resource figures are NOT summed —
-// multiplying a placeholder allocation by hundreds of pending tasks would
-// give misleading totals.
+// count and state histogram. Its per-task resource figures are counted
+// ONCE — enough to surface what a task in this array needs without
+// multiplying an allocation by hundreds of tasks that aren't running.
 func collapseArrays(items []arrayCollapseItem) []JobRow {
 	type group struct {
 		first                  JobRow
@@ -175,6 +175,9 @@ func collapseArrays(items []arrayCollapseItem) []JobRow {
 			}
 			g.count += n
 			g.states[it.row.State] += n
+			g.sumCPU += it.row.CPUs
+			g.sumGPU += it.row.GPUs
+			g.sumMem += it.row.MemoryMB
 			continue
 		}
 		g.count++

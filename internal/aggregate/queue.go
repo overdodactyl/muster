@@ -167,6 +167,9 @@ func collapseArraysQueue(items []queueCollapseItem) []QueueRow {
 			}
 			g.count += n
 			g.states[it.row.State] += n
+			g.sumCPU += it.row.CPUs
+			g.sumGPU += it.row.GPUs
+			g.sumMem += it.row.MemoryMB
 			if !it.row.SubmitTime.IsZero() && (g.oldest.IsZero() || it.row.SubmitTime.Before(g.oldest)) {
 				g.oldest = it.row.SubmitTime
 			}

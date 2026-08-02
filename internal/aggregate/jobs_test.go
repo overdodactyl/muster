@@ -103,19 +103,49 @@ func TestJobs_CollapsePendingRangeIntoArray(t *testing.T) {
 	if r.ArrayThrottle != 3 {
 		t.Errorf("ArrayThrottle = %d, want 3", r.ArrayThrottle)
 	}
-	// Resource sums must reflect only the 2 running tasks (2×4 CPUs, 2×1 GPU,
-	// 2×8000 MB) — not multiplied by the 8 pending tasks.
-	if r.CPUs != 8 {
-		t.Errorf("CPUs = %d, want 8 (2 running × 4)", r.CPUs)
+	// Resource sums = 2 running tasks + 1 sample from the range row (to
+	// surface per-task allocation on pure-pending arrays). Not multiplied
+	// by all 8 pending tasks.
+	if r.CPUs != 12 {
+		t.Errorf("CPUs = %d, want 12 (2 running + 1 range × 4)", r.CPUs)
 	}
-	if r.GPUs != 2 {
-		t.Errorf("GPUs = %d, want 2", r.GPUs)
+	if r.GPUs != 3 {
+		t.Errorf("GPUs = %d, want 3", r.GPUs)
 	}
-	if r.MemoryMB != 16000 {
-		t.Errorf("MemoryMB = %d, want 16000", r.MemoryMB)
+	if r.MemoryMB != 24000 {
+		t.Errorf("MemoryMB = %d, want 24000", r.MemoryMB)
 	}
 	if r.State != "RUNNING" {
 		t.Errorf("dominant State = %q, want RUNNING", r.State)
+	}
+}
+
+func TestJobs_PurePendingArrayShowsPerTaskResources(t *testing.T) {
+	// Array with only a compact-range row (no running tasks yet). The
+	// collapsed row should surface per-task allocation, not 0.
+	jobs := []slurm.Job{
+		{
+			ID: 300000, User: "dave", Partition: "gpu", State: "PENDING",
+			Reason:    "Resources",
+			NodeCount: 1, CPUs: 8, MemPerNode: 32000, GRESPerNode: "gres/gpu:1",
+			SubmitTime:      sampleNow.Add(-1 * time.Hour),
+			ArrayJobID:      300000,
+			ArrayTaskID:     -1,
+			ArrayTaskString: "0-9",
+			ArrayTaskCount:  10,
+		},
+	}
+	rows := Jobs(jobs, "gpu", "", true, "cpus", 0, sampleNow)
+	if len(rows) != 1 {
+		t.Fatalf("expected 1 row, got %d", len(rows))
+	}
+	r := rows[0]
+	if r.CPUs != 8 || r.GPUs != 1 || r.MemoryMB != 32000 {
+		t.Errorf("pure-pending array should show per-task resources; got CPUs=%d GPUs=%d MemMB=%d",
+			r.CPUs, r.GPUs, r.MemoryMB)
+	}
+	if r.ArrayCount != 10 {
+		t.Errorf("ArrayCount = %d, want 10", r.ArrayCount)
 	}
 }
 
