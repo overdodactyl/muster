@@ -1,6 +1,10 @@
 package render
 
-import "github.com/fatih/color"
+import (
+	"strings"
+
+	"github.com/fatih/color"
+)
 
 // Theme controls a handful of colors that depend on whether the terminal
 // background is dark or light. The default is dark; SetTheme("light")
@@ -44,6 +48,33 @@ func ColorState(class string) string {
 	default:
 		return class
 	}
+}
+
+// primaryNodeStates are the Slurm state names already implied by the
+// StateClass. Anything else Slurm reports (PLANNED, POWERED_DOWN,
+// REBOOT_REQUESTED, ...) is a modifier worth surfacing.
+var primaryNodeStates = map[string]bool{
+	"IDLE": true, "MIXED": true, "ALLOCATED": true, "COMPLETING": true,
+	"RESERVED": true, "DRAIN": true, "DRAINED": true, "DRAINING": true,
+	"MAINT": true, "MAINTENANCE": true, "DOWN": true, "FAIL": true,
+	"FAILING": true, "NOT_RESPONDING": true,
+}
+
+// formatNodeState returns the primary state (colored per class) with any
+// Slurm state flags appended as faint dot-separated suffixes — e.g.
+// "mixed·planned" when the backfill scheduler is holding resources for a
+// pending job. The suffixes let users tell "idle" from "idle·planned" or
+// "reboot_requested" apart at a glance.
+func formatNodeState(states []string, class string) string {
+	out := ColorState(class)
+	for _, s := range states {
+		up := strings.ToUpper(s)
+		if primaryNodeStates[up] {
+			continue
+		}
+		out += "·" + ColorFaint(strings.ToLower(s))
+	}
+	return out
 }
 
 // ColorCount tints a small count: 0 stays default, positive in a category-specific color.
