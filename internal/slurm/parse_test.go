@@ -69,6 +69,38 @@ func TestParseSqueueJobs_Fixture(t *testing.T) {
 	if len(jobs) == 0 {
 		t.Fatal("no jobs parsed")
 	}
+	// Locate the compact-range row from the array fixture (job 200000).
+	var pendingRange *Job
+	runningTasks := 0
+	for i := range jobs {
+		j := &jobs[i]
+		if j.ArrayJobID != 200000 {
+			continue
+		}
+		if j.ArrayTaskString != "" {
+			pendingRange = j
+		} else if j.ArrayTaskID >= 0 {
+			runningTasks++
+		}
+	}
+	if runningTasks != 2 {
+		t.Errorf("expected 2 running array tasks for 200000, got %d", runningTasks)
+	}
+	if pendingRange == nil {
+		t.Fatal("no pending compact-range row parsed for array 200000")
+	}
+	if pendingRange.ArrayTaskString != "2-9%3" {
+		t.Errorf("ArrayTaskString = %q, want %q", pendingRange.ArrayTaskString, "2-9%3")
+	}
+	if pendingRange.ArrayTaskCount != 8 {
+		t.Errorf("ArrayTaskCount = %d, want 8", pendingRange.ArrayTaskCount)
+	}
+	if pendingRange.ArrayThrottle != 3 {
+		t.Errorf("ArrayThrottle = %d, want 3", pendingRange.ArrayThrottle)
+	}
+	if !pendingRange.IsArrayTask() {
+		t.Error("range row should report IsArrayTask() == true")
+	}
 }
 
 func TestDecodeJSON_NonJSON(t *testing.T) {

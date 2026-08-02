@@ -41,17 +41,25 @@ type Job struct {
 
 	// Array-job fields. Non-zero ArrayJobID + non-negative ArrayTaskID =>
 	// this Job is one task of an array submitted with sbatch --array.
-	ArrayJobID  int64
-	ArrayTaskID int // -1 when not an array task
+	// A pending compact-range from squeue emits ArrayTaskID=-1 with
+	// ArrayTaskString set (e.g. "73-224%3"); ArrayTaskCount tallies how
+	// many tasks the row represents (1 for a normal task row).
+	ArrayJobID      int64
+	ArrayTaskID     int // -1 when not an array task or when this row is a range
+	ArrayTaskString string
+	ArrayTaskCount  int
+	ArrayThrottle   int // %N throttle from array_max_tasks; 0 if none
 
 	// Dependency is the raw squeue 'dependency' field, e.g.
 	// 'afterok:9300291_*(unfulfilled)'. Empty when none.
 	Dependency string
 }
 
-// IsArrayTask reports whether this job belongs to a Slurm job array.
+// IsArrayTask reports whether this job belongs to a Slurm job array —
+// either a single task (ArrayTaskID >= 0) or a compact pending range
+// (ArrayTaskString non-empty).
 func (j Job) IsArrayTask() bool {
-	return j.ArrayJobID != 0 && j.ArrayTaskID >= 0
+	return j.ArrayJobID != 0 && (j.ArrayTaskID >= 0 || j.ArrayTaskString != "")
 }
 
 // JobDetail is the extra info available via `scontrol show job <id>` that

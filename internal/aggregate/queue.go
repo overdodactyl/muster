@@ -35,8 +35,14 @@ type QueueRow struct {
 
 	// Array-job summary fields, mirror of JobRow's. JobID is the parent
 	// array_job_id when ArrayCount > 0.
-	ArrayCount  int            `json:"array_count,omitempty"`
-	ArrayStates map[string]int `json:"array_states,omitempty"`
+	ArrayCount    int            `json:"array_count,omitempty"`
+	ArrayStates   map[string]int `json:"array_states,omitempty"`
+	ArrayThrottle int            `json:"array_throttle,omitempty"`
+
+	// Set on expanded rows that represent a compact pending range like
+	// "73-224%3". Empty on ordinary single-task rows.
+	ArrayTaskString string `json:"array_task_string,omitempty"`
+	ArrayTaskCount  int    `json:"array_task_count,omitempty"`
 }
 
 // Queue returns pending jobs (and running too if includeRunning). reasonFilter
@@ -65,20 +71,23 @@ func QueueCollapsed(jobs []slurm.Job, partition string, includeRunning, expandAr
 			continue
 		}
 		row := QueueRow{
-			JobID:       j.ID,
-			User:        j.User,
-			Account:     j.Account,
-			Name:        j.Name,
-			Partition:   j.Partition,
-			State:       j.State,
-			CPUs:        j.CPUs,
-			GPUs:        jobGPUs(j),
-			MemoryMB:    jobMemory(j),
-			TimeLimit:   j.TimeLimit,
-			Priority:    j.Priority,
-			Reason:      j.Reason,
-			ReasonHuman: slurm.ExplainReason(j.Reason),
-			SubmitTime:  j.SubmitTime,
+			JobID:           j.ID,
+			User:            j.User,
+			Account:         j.Account,
+			Name:            j.Name,
+			Partition:       j.Partition,
+			State:           j.State,
+			CPUs:            j.CPUs,
+			GPUs:            jobGPUs(j),
+			MemoryMB:        jobMemory(j),
+			TimeLimit:       j.TimeLimit,
+			Priority:        j.Priority,
+			Reason:          j.Reason,
+			ReasonHuman:     slurm.ExplainReason(j.Reason),
+			SubmitTime:      j.SubmitTime,
+			ArrayThrottle:   j.ArrayThrottle,
+			ArrayTaskString: j.ArrayTaskString,
+			ArrayTaskCount:  j.ArrayTaskCount,
 		}
 		if !j.SubmitTime.IsZero() {
 			row.SubmitAge = now.Sub(j.SubmitTime)
@@ -108,7 +117,9 @@ type queueCollapseItem struct {
 }
 
 // collapseArraysQueue groups pending-array tasks by array_job_id. Same logic
-// as collapseArrays for JobRow but on QueueRow.
+// as collapseArrays for JobRow but on QueueRow. A compact-range row (raw.
+// ArrayTaskString != "") contributes ArrayTaskCount to the group's count
+// and state histogram but not to resource sums.
 func collapseArraysQueue(items []queueCollapseItem) []QueueRow {
 	type group struct {
 		first                  QueueRow
@@ -116,6 +127,7 @@ func collapseArraysQueue(items []queueCollapseItem) []QueueRow {
 		minPrio                int64
 		oldest                 time.Time
 		earliestEligible       time.Time
+		throttle               int
 		states                 map[string]int
 		count                  int
 	}
@@ -145,6 +157,21 @@ func collapseArraysQueue(items []queueCollapseItem) []QueueRow {
 			}
 			groups[it.raw.ArrayJobID] = g
 		}
+		if g.throttle == 0 && it.raw.ArrayThrottle > 0 {
+			g.throttle = it.raw.ArrayThrottle
+		}
+		if it.raw.ArrayTaskString != "" {
+			n := it.raw.ArrayTaskCount
+			if n <= 0 {
+				n = 1
+			}
+			g.count += n
+			g.states[it.row.State] += n
+			if !it.row.SubmitTime.IsZero() && (g.oldest.IsZero() || it.row.SubmitTime.Before(g.oldest)) {
+				g.oldest = it.row.SubmitTime
+			}
+			continue
+		}
 		g.count++
 		g.sumCPU += it.row.CPUs
 		g.sumGPU += it.row.GPUs
@@ -173,6 +200,7 @@ func collapseArraysQueue(items []queueCollapseItem) []QueueRow {
 		}
 		row.ArrayCount = g.count
 		row.ArrayStates = g.states
+		row.ArrayThrottle = g.throttle
 		row.State = dominantState(g.states)
 		out = append(out, row)
 	}

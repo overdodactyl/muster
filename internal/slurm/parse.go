@@ -99,32 +99,45 @@ func parseSqueueJobs(b []byte) ([]Job, error) {
 			gres = j.TresPerJob
 		}
 		arrayTask := -1
+		arrayCount := 0
+		strCount, strThrottle := parseArrayTaskString(j.ArrayTaskString)
 		if j.ArrayTaskID.Set {
 			arrayTask = j.ArrayTaskID.Int()
+			arrayCount = 1
+		} else if j.ArrayTaskString != "" {
+			// Compact pending range emitted by squeue --json, e.g. "73-224%3".
+			arrayCount = strCount
+		}
+		throttle := j.ArrayMaxTasks.Int()
+		if throttle == 0 {
+			throttle = strThrottle
 		}
 		out = append(out, Job{
-			ID:          j.JobID,
-			User:        j.UserName,
-			Account:     j.Account,
-			Name:        j.Name,
-			Partition:   j.Partition,
-			State:       state,
-			Reason:      j.StateReason,
-			Nodes:       j.Nodes,
-			NodeCount:   j.NodeCount.Int(),
-			CPUs:        j.CPUs.Int(),
-			MemPerCPU:   j.MemoryPerCPU.Int(),
-			MemPerNode:  j.MemoryPerNode.Int(),
-			GRESPerNode: gres,
-			GRESDetail:  j.GRESDetail,
-			SubmitTime:  j.SubmitTime.Time(),
-			StartTime:   j.StartTime.Time(),
-			EndTime:     j.EndTime.Time(),
-			Priority:    int64(j.Priority.Int()),
-			TimeLimit:   time.Duration(j.TimeLimit.Int()) * time.Minute,
-			ArrayJobID:  int64(j.ArrayJobID.Int()),
-			ArrayTaskID: arrayTask,
-			Dependency:  j.Dependency,
+			ID:              j.JobID,
+			User:            j.UserName,
+			Account:         j.Account,
+			Name:            j.Name,
+			Partition:       j.Partition,
+			State:           state,
+			Reason:          j.StateReason,
+			Nodes:           j.Nodes,
+			NodeCount:       j.NodeCount.Int(),
+			CPUs:            j.CPUs.Int(),
+			MemPerCPU:       j.MemoryPerCPU.Int(),
+			MemPerNode:      j.MemoryPerNode.Int(),
+			GRESPerNode:     gres,
+			GRESDetail:      j.GRESDetail,
+			SubmitTime:      j.SubmitTime.Time(),
+			StartTime:       j.StartTime.Time(),
+			EndTime:         j.EndTime.Time(),
+			Priority:        int64(j.Priority.Int()),
+			TimeLimit:       time.Duration(j.TimeLimit.Int()) * time.Minute,
+			ArrayJobID:      int64(j.ArrayJobID.Int()),
+			ArrayTaskID:     arrayTask,
+			ArrayTaskString: j.ArrayTaskString,
+			ArrayTaskCount:  arrayCount,
+			ArrayThrottle:   throttle,
+			Dependency:      j.Dependency,
 		})
 	}
 	return out, nil
