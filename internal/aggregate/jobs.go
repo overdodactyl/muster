@@ -192,7 +192,15 @@ func collapseArrays(items []arrayCollapseItem) []JobRow {
 			g.nodes[it.row.Nodes] = true
 		}
 	}
-	for _, g := range groups {
+	// Emit groups in ascending array-id order so downstream stable sorts
+	// see deterministic input (map iteration is randomized).
+	ids := make([]int64, 0, len(groups))
+	for id := range groups {
+		ids = append(ids, id)
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	for _, id := range ids {
+		g := groups[id]
 		row := g.first
 		row.CPUs = g.sumCPU
 		row.GPUs = g.sumGPU
