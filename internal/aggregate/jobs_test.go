@@ -70,8 +70,8 @@ func sampleArrayJobs() []slurm.Job {
 		},
 		{
 			ID: 200000, User: "carol", Account: "labC", Name: "sweep", Partition: "gpu",
-			State:  "PENDING",
-			Reason: "JobArrayTaskLimit",
+			State:     "PENDING",
+			Reason:    "JobArrayTaskLimit",
 			NodeCount: 1, CPUs: 4, MemPerNode: 8000, GRESPerNode: "gres/gpu:1",
 			SubmitTime:      sampleNow.Add(-20 * time.Minute),
 			Priority:        900,

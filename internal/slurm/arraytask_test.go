@@ -4,9 +4,9 @@ import "testing"
 
 func TestParseArrayTaskString(t *testing.T) {
 	cases := []struct {
-		in            string
-		wantCount     int
-		wantThrottle  int
+		in           string
+		wantCount    int
+		wantThrottle int
 	}{
 		{"73-224%3", 152, 3},
 		{"1,3,5", 3, 0},
