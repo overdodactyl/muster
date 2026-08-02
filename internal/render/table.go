@@ -163,7 +163,7 @@ func RenderNodes(w io.Writer, rows []aggregate.NodeRow, showJobs bool) {
 		t.AppendRow(table.Row{
 			ColorCyan(r.Name),
 			r.Partition,
-			ColorState(r.StateClass),
+			formatNodeState(r.State, r.StateClass),
 			cpus,
 			mem,
 			gpu,
